@@ -1,8 +1,9 @@
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem.XInput;
 
 //플레이어의 입력을 계속 받아야함
-public class InputHandle : MonoBehaviour
+public class InputHandle : NetworkBehaviour
 {
     #region Components
     //숫자키의 번호를 받음!
@@ -33,6 +34,7 @@ public class InputHandle : MonoBehaviour
 
     void Update()
     {
+        if(!IsOwner) return;
         verticalInput = Input.GetAxis(verticallInputName);
         horizontalInput = Input.GetAxis(horizontalInputName);
         jumpInput = Input.GetKeyDown(KeyCode.Space);

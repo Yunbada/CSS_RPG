@@ -1,14 +1,15 @@
+using Unity.Netcode;
+using Unity.VisualScripting;
 using UnityEngine;
 
-public class SkillController : MonoBehaviour
+public class SkillController : NetworkBehaviour
 {
     private InputHandle Inputhandle;
-    private ISkill[] skill;
-
+    [SerializeField] private ISkill Iskill;
+    
 
     void Start()
     {
-        skill = new ISkill[9];
         Inputhandle = GetComponent<InputHandle>();
     }
     void Update()
@@ -16,9 +17,9 @@ public class SkillController : MonoBehaviour
         UseSkill(Inputhandle.numInput);
     }
 
-    void UseSkill(int num)
+    public void UseSkill(int num)
     {
-        skill[num].UseSkill();
+        if (num != 0) Debug.Log(num);
     }
 
 }
