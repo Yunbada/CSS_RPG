@@ -1,6 +1,24 @@
 using UnityEngine;
 
-public class SkillControll
+public class SkillController : MonoBehaviour
 {
-    ///최원준 선생님이 해주실 거야 난 그렇게 믿어.
+    private InputHandle Inputhandle;
+    private ISkill[] skill;
+
+
+    void Start()
+    {
+        skill = new ISkill[9];
+        Inputhandle = GetComponent<InputHandle>();
+    }
+    void Update()
+    {
+        UseSkill(Inputhandle.numInput);
+    }
+
+    void UseSkill(int num)
+    {
+        skill[num].UseSkill();
+    }
+
 }

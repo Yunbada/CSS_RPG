@@ -1,6 +1,7 @@
+using Unity.Netcode;
 using UnityEngine;
-
-public class PlayerMove : MonoBehaviour
+using UnityEngine.InputSystem.Haptics;
+public class PlayerMove : NetworkBehaviour
 {
 
     [SerializeField] float walkSpeed = 4f;
@@ -9,55 +10,49 @@ public class PlayerMove : MonoBehaviour
     [SerializeField] float gravity = -9.81f;
     [SerializeField] float jumpHeight = 2f;
 
-    [SerializeField] float mouseSpeed = 1.5f;
+    [SerializeField] float mouseSpeed = 1f;
+    [SerializeField] private InputHandle Inputhandle;
 
     private float xRot;
-    private KeyCode[] keyCodes = {
-    KeyCode.Alpha1,
-    KeyCode.Alpha2,
-    KeyCode.Alpha3,
-    KeyCode.Alpha4,
-    KeyCode.Alpha5,
-    KeyCode.Alpha6,
-    KeyCode.Alpha7,
-    KeyCode.Alpha8,
-    KeyCode.Alpha9,
-    };    
 
     Vector3 velo;
     Transform camTr;
 
     CharacterController cc;
 
+
     void Start()
     {
         cc = GetComponent<CharacterController>();
         camTr = Camera.main.transform;
+        Inputhandle = GetComponent<InputHandle>();
         Cursor.lockState = CursorLockMode.Locked;
     }
 
     void Update()
     {
+        if(!IsOwner) return;
+        
         MoveAndJump();
         Look();
-        KeyNo();
     }
+
 
 
     void MoveAndJump()
     {
-        float h = Input.GetAxis("Horizontal");
-        float v = Input.GetAxis("Vertical");
+        float h = Inputhandle.horizontalInput;
+        float v = Inputhandle.verticalInput;
 
         bool grounded = cc.isGrounded;
         if (grounded && velo.y < 0) velo.y = -2f;
 
-        float curSpeed = Input.GetKey(KeyCode.LeftShift) ? runSpeed : walkSpeed;
+        float curSpeed = Inputhandle.runInput ? runSpeed : walkSpeed;
         Vector3 movDir = transform.right * h + transform.forward * v;
 
         cc.Move(movDir * curSpeed * Time.deltaTime);
 
-        if (Input.GetButtonDown("Jump") && grounded) velo.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
+        if (Inputhandle.jumpInput && grounded) velo.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
         velo.y += gravity * Time.deltaTime;
 
         cc.Move(velo * Time.deltaTime);
@@ -65,8 +60,8 @@ public class PlayerMove : MonoBehaviour
 
     void Look()
     {
-        float mouseX = Input.GetAxis("Mouse X") * mouseSpeed;
-        float mouseY = Input.GetAxis("Mouse Y") * mouseSpeed;
+        float mouseX = Inputhandle.mousexInput * mouseSpeed;
+        float mouseY = Inputhandle.mouseyInput * mouseSpeed;
 
         xRot -= mouseY;
         xRot = Mathf.Clamp(xRot, -90f, 90f);
@@ -75,15 +70,6 @@ public class PlayerMove : MonoBehaviour
         transform.Rotate(Vector3.up * mouseX);
     }
     
-    void KeyNo()
-    {
-        for(int i = 0 ; i < keyCodes.Length; i ++ ){
-            if(Input.GetKeyDown(keyCodes[i])){
-            int numberPressed = i+1;
-            Debug.Log(numberPressed);
-            }     
-        }
-    }
 }
 
 ///키입력 > 가상함수 > 분기점(가상함수 타이머, 다른 키 입력시 타이머 초기화 > 타스킬 사용) 
