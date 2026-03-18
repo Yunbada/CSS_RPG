@@ -2,7 +2,7 @@ using Unity.Netcode;
 using Unity.VisualScripting;
 using UnityEngine;
 
-public class SkillController : NetworkBehaviour
+public class SkillController : MonoBehaviour
 {
     private InputHandle Inputhandle;
     [SerializeField] private ISkill Iskill;
@@ -19,7 +19,7 @@ public class SkillController : NetworkBehaviour
 
     public void UseSkill(int num)
     {
-        if (num != 0) Debug.Log(num);
+        if (num != -1) Debug.Log(num);
     }
 
 }

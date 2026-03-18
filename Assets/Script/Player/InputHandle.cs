@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.InputSystem.XInput;
 
 //플레이어의 입력을 계속 받아야함
-public class InputHandle : NetworkBehaviour
+public class InputHandle : MonoBehaviour
 {
     #region Components
     //숫자키의 번호를 받음!
@@ -34,7 +34,6 @@ public class InputHandle : NetworkBehaviour
 
     void Update()
     {
-        if(!IsOwner) return;
         verticalInput = Input.GetAxis(verticallInputName);
         horizontalInput = Input.GetAxis(horizontalInputName);
         jumpInput = Input.GetKeyDown(KeyCode.Space);
