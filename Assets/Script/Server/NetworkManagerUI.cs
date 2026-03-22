@@ -11,20 +11,24 @@ public class NetworkManagerUI : NetworkBehaviour
     [SerializeField] private Button serverBtn;
     [SerializeField] private Button hostBtn;
     [SerializeField] private Button clientBtn;
+    [SerializeField] private Canvas Canvas;
 
     private void Awake()
     {
         serverBtn.onClick.AddListener(() => {
             NetworkManager.Singleton.StartServer();
+            Canvas.enabled = false;
+
         });
         hostBtn.onClick.AddListener(() => {
             NetworkManager.Singleton.StartHost();
+            Canvas.enabled = false;
         });
     
         clientBtn.onClick.AddListener(() => {
             NetworkManager.Singleton.StartClient();
+            Canvas.enabled = false;
         });
-    
     }
 
 }

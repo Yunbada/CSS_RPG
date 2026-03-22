@@ -1,4 +1,5 @@
 using Unity.Netcode;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem.Haptics;
 public class PlayerMove : NetworkBehaviour
@@ -12,20 +13,18 @@ public class PlayerMove : NetworkBehaviour
 
     [SerializeField] float mouseSpeed = 1f;
     [SerializeField] private InputHandle Inputhandle;
+    [SerializeField] private CharacterController cc;
+    [SerializeField] private Camera Camera;
 
     private float xRot;
 
     Vector3 velo;
-    Transform camTr;
 
-    CharacterController cc;
 
 
     void Start()
     {
-        cc = GetComponent<CharacterController>();
-        camTr = Camera.main.transform;
-        Inputhandle = GetComponent<InputHandle>();
+        cam = Camera.transform();
         Cursor.lockState = CursorLockMode.Locked;
     }
 
@@ -66,7 +65,7 @@ public class PlayerMove : NetworkBehaviour
         xRot -= mouseY;
         xRot = Mathf.Clamp(xRot, -90f, 90f);
 
-        camTr.localRotation = Quaternion.Euler(xRot, 0f, 0f);
+        Camera.main.transform.localRotation = Quaternion.Euler(xRot, 0f, 0f);
         transform.Rotate(Vector3.up * mouseX);
     }
     

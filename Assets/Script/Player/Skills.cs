@@ -1,10 +1,11 @@
 using UnityEngine;
 
-public class Skills : ISkill
+public class Skills
 {
-    
-    public void UseSkill()
+    public enum Noob_Skill
     {
-        Debug.Log("대쉬 x2");
+        dash,
+        ddash,
+        
     }
 }

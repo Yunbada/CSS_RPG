@@ -5,11 +5,12 @@ using UnityEngine;
 public class SkillController : MonoBehaviour
 {
     private InputHandle Inputhandle;
-    [SerializeField] private ISkill Iskill;
+    private ISkill Iskill;
     
 
     void Start()
     {
+        ISkill[] Iskill = new ISkill[9];
         Inputhandle = GetComponent<InputHandle>();
     }
     void Update()
@@ -19,7 +20,7 @@ public class SkillController : MonoBehaviour
 
     public void UseSkill(int num)
     {
-        if (num != -1) Debug.Log(num);
+        Iskill.Skill();
     }
 
 }
