@@ -1,7 +1,13 @@
-using System;
 using UnityEngine;
+using Unity.Netcode;
 
 public interface ISkill
 {
-    void Skill();
+    string SkillName { get; }
+    float Cooldown { get; }
+    int RequiredLevel { get; }
+    float CurrentCooldown { get; set; }
+
+    bool CanUse(int playerLevel);
+    void Execute(GameObject caster);
 }
