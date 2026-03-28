@@ -236,6 +236,9 @@ public class FighterSkillExecutor : MonoBehaviour
     private IEnumerator BunGaeChumCoroutine()
     {
         SetInvincible(true);
+        var model = transform.Find("PlayerModel");
+        if (model != null) model.gameObject.SetActive(false); // 모델 숨기기
+
         float elapsed = 0f;
         float duration = 2f;
         float tickInterval = 0.25f;
@@ -246,12 +249,44 @@ public class FighterSkillExecutor : MonoBehaviour
             tickTimer += Time.deltaTime;
             if (tickTimer >= tickInterval)
             {
-                AreaAttack(transform.position, 3f, 1.0f, "번개춤");
+                // 주변 5m 범위 내의 적 찾기
+                Collider[] hits = Physics.OverlapSphere(transform.position, 5f);
+                System.Collections.Generic.List<PlayerState> targets = new System.Collections.Generic.List<PlayerState>();
+                foreach (var col in hits)
+                {
+                    var target = CombatSystem.FindPlayerState(col.gameObject);
+                    if (target != null && target != playerState && target.currentTeam.Value != playerState.currentTeam.Value)
+                    {
+                        targets.Add(target);
+                    }
+                }
+
+                if (targets.Count > 0)
+                {
+                    // 무작위 타겟 하나 선택하여 순간이동
+                    PlayerState randomTarget = targets[Random.Range(0, targets.Count)];
+                    
+                    if (charCtrl != null) charCtrl.enabled = false;
+                    
+                    Vector3 newPos = randomTarget.transform.position;
+                    newPos.x += Random.Range(-0.5f, 0.5f);
+                    newPos.z += Random.Range(-0.5f, 0.5f);
+                    transform.position = newPos;
+                    transform.LookAt(randomTarget.transform);
+                    
+                    if (charCtrl != null) charCtrl.enabled = true;
+
+                    // 이동한 위치에서 타격
+                    AreaAttack(transform.position, 2f, 1.0f, "번개춤");
+                }
+
                 tickTimer = 0f;
             }
             elapsed += Time.deltaTime;
             yield return null;
         }
+
+        if (model != null) model.gameObject.SetActive(true); // 모델 보이기
         Debug.Log("번개춤 완료!");
         SetInvincible(false);
     }
@@ -300,7 +335,7 @@ public class FighterSkillExecutor : MonoBehaviour
     private IEnumerator JinGongNanMuCoroutine()
     {
         SetInvincible(true);
-        // 2초간 주변 4m 적들에게 틱 데미지 + 끌어당기기
+        // 2초간 주변 5m 적들에게 틱 데미지 + 끌어당기기
         float elapsed = 0f;
         float pullDuration = 2f;
         float tickInterval = 0.3f;
@@ -311,8 +346,28 @@ public class FighterSkillExecutor : MonoBehaviour
             tickTimer += Time.deltaTime;
             if (tickTimer >= tickInterval)
             {
-                // 작은 틱 데미지
-                AreaAttack(transform.position, 4f, 0.3f, "진공난무(흡인)");
+                // 주변 5m 적 검색 및 끌어당기기
+                Collider[] hits = Physics.OverlapSphere(transform.position, 5f);
+                foreach (var col in hits)
+                {
+                    var target = CombatSystem.FindPlayerState(col.gameObject);
+                    if (target != null && target != playerState && target.currentTeam.Value != playerState.currentTeam.Value)
+                    {
+                        // 플레이어 방향으로 끌어당기는 벡터 계산
+                        Vector3 pullDir = (transform.position - target.transform.position).normalized;
+                        // y축(위아래)은 유지
+                        pullDir.y = 0; 
+                        
+                        // 넉업 함수를 재활용하여 강제 이동(끌어당기기) 적용
+                        target.KnockUpServerRpc(pullDir * 6f, tickInterval);
+                        
+                        // 틱 데미지
+                        if (combatSystem != null)
+                        {
+                            combatSystem.DealDamageToTarget(target, 0.3f, "진공난무(흡인)");
+                        }
+                    }
+                }
                 tickTimer = 0f;
             }
             elapsed += Time.deltaTime;
@@ -320,7 +375,7 @@ public class FighterSkillExecutor : MonoBehaviour
         }
 
         // 최종 강력한 타격
-        AreaAttack(transform.position, 3f, 4.0f, "진공난무(폭발)");
+        AreaAttack(transform.position, 4f, 4.0f, "진공난무(폭발)");
         Debug.Log("진공난무 최종 타격!");
         SetInvincible(false);
     }

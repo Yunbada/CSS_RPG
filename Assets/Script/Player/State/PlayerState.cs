@@ -116,10 +116,15 @@ public class PlayerState : NetworkBehaviour
     {
         if (targetRef.TryGet(out NetworkObject targetObj))
         {
-            var targetState = targetObj.GetComponent<PlayerState>();
+            // PlayerState는 루트가 아닌 RPG_Systems 자식에 있으므로 GetComponentInChildren 사용
+            var targetState = targetObj.GetComponentInChildren<PlayerState>();
             if (targetState != null)
             {
                 targetState.TakeDamage(damage, OwnerClientId);
+            }
+            else
+            {
+                Debug.LogWarning($"[AttackTargetServerRpc] targetObj '{targetObj.name}'에서 PlayerState를 찾을 수 없음!");
             }
         }
     }
@@ -137,9 +142,12 @@ public class PlayerState : NetworkBehaviour
         // 실제 물리적인 이동은 해당 캐릭터의 소유자(Client)가 수행해야 정상 동기화됨
         if (IsOwner)
         {
-            var movement = GetComponent<PlayerMovement>();
+            // PlayerMovement는 루트에 있으므로 GetComponentInParent 사용
+            var movement = GetComponentInParent<PlayerMovement>();
             if (movement != null)
                 movement.ApplyForcedMovement(forceVelocity, duration);
+            else
+                Debug.LogWarning("[KnockUp] PlayerMovement를 찾을 수 없음!");
         }
     }
 
@@ -172,6 +180,14 @@ public class PlayerState : NetworkBehaviour
     {
         Debug.Log($"Player {OwnerClientId} changed team to {current}");
         ApplyTeamColor(current);
+
+        // 숙주좀비는 체력 100000으로 설정
+        if (IsServer && current == Team.HostZombie)
+        {
+            maxHealth.Value = 100000;
+            currentHealth.Value = 100000;
+            Debug.Log($"[PlayerState] 숙주좀비 체력 100000 설정 완료! Player {OwnerClientId}");
+        }
     }
 
     private Material zombieOverlayMaterial;
