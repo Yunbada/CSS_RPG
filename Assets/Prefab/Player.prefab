@@ -156,7 +156,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerState
   ShowTopMostFoldoutHeaderGroup: 1
-  mainCanvasPrefab: {fileID: 5002355137643145897}
   currentTeam:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
@@ -177,6 +176,12 @@ MonoBehaviour:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
     m_InternalValue: 0
+  isInvincible:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
+  hitEffectPrefab: {fileID: 2971465956471341466, guid: 30382b5445766ab4ca52845e90659c94, type: 3}
 --- !u!114 &6737690673452673902
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -730,10 +735,5 @@ PrefabInstance:
 --- !u!224 &3569941505010506299 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 7421749615717044915, guid: ecf8c5e768941114cb8e499dc977cca0, type: 3}
-  m_PrefabInstance: {fileID: 6302122570534078600}
-  m_PrefabAsset: {fileID: 0}
---- !u!1 &5002355137643145897 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 1305564951547879969, guid: ecf8c5e768941114cb8e499dc977cca0, type: 3}
   m_PrefabInstance: {fileID: 6302122570534078600}
   m_PrefabAsset: {fileID: 0}

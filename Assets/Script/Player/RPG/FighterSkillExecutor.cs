@@ -364,7 +364,8 @@ public class FighterSkillExecutor : MonoBehaviour
                         // 틱 데미지
                         if (combatSystem != null)
                         {
-                            combatSystem.DealDamageToTarget(target, 0.3f, "진공난무(흡인)");
+                            // 당겨지는 대상의 몸통 부분을 타격 지점으로 전달
+                            combatSystem.DealDamageToTarget(target, 0.3f, "진공난무(흡인)", col.ClosestPoint(transform.position));
                         }
                     }
                 }
@@ -401,7 +402,7 @@ public class FighterSkillExecutor : MonoBehaviour
             {
                 if (combatSystem != null)
                 {
-                    combatSystem.DealDamageToTarget(target, multiplier, skillName);
+                    combatSystem.DealDamageToTarget(target, multiplier, skillName, hit.point);
                     return target; // 최초 유효 대상 하나만 반환
                 }
             }
@@ -423,7 +424,7 @@ public class FighterSkillExecutor : MonoBehaviour
             {
                 if (combatSystem != null)
                 {
-                    combatSystem.DealDamageToTarget(target, multiplier, skillName);
+                    combatSystem.DealDamageToTarget(target, multiplier, skillName, col.ClosestPoint(center));
                 }
             }
         }

@@ -27,6 +27,9 @@ public class PlayerState : NetworkBehaviour
     // 스킬 사용 중 무적 상태
     public NetworkVariable<bool> isInvincible = new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+    [Header("VFX")]
+    public GameObject hitEffectPrefab;
+
     public override void OnNetworkSpawn()
     {
         if (IsServer)
@@ -49,7 +52,7 @@ public class PlayerState : NetworkBehaviour
             // 오직 C# 코드로만 런타임에 완벽한 UI 캔버스를 창조 (프리팹/인스펙터 연결이 전혀 필요 없음)
             UIBuilder.CreateGameHUD(GetComponent<PlayerClass>());
 
-            var mainMenu = GameObject.Find("MainMenu_Canvas");
+            var mainMenu = GameObject.Find("MainMenu_Canvas"); //플레이어 + Canvas 얘는 MainmenuCanvas 오브젝트로 만들어 놓고 플레이어 화면이랑 연동시키는 형태?
             if (mainMenu != null)
             {
                 mainMenu.SetActive(false);
@@ -110,9 +113,9 @@ public class PlayerState : NetworkBehaviour
         currentHealth.Value = Mathf.Min(currentHealth.Value + amount, maxHealth.Value);
     }
 
-    // 클라이언트 -> 서버 공격 요청 (CombatSystem이 MonoBehaviour이므로 여기서 RPC 처리)
+    // 클라이언트 -> 서버 공격 요청 (타격 지점 포함)
     [ServerRpc(RequireOwnership = false)]
-    public void AttackTargetServerRpc(NetworkObjectReference targetRef, int damage)
+    public void AttackTargetServerRpc(NetworkObjectReference targetRef, int damage, Vector3 hitPosition)
     {
         if (targetRef.TryGet(out NetworkObject targetObj))
         {
@@ -121,11 +124,24 @@ public class PlayerState : NetworkBehaviour
             if (targetState != null)
             {
                 targetState.TakeDamage(damage, OwnerClientId);
+                
+                // 모든 클라이언트에게 타격 이펙트 재생 요청
+                PlayHitEffectClientRpc(hitPosition);
             }
             else
             {
                 Debug.LogWarning($"[AttackTargetServerRpc] targetObj '{targetObj.name}'에서 PlayerState를 찾을 수 없음!");
             }
+        }
+    }
+
+    [ClientRpc]
+    private void PlayHitEffectClientRpc(Vector3 position)
+    {
+        if (hitEffectPrefab != null)
+        {
+            GameObject effect = Instantiate(hitEffectPrefab, position, Quaternion.identity);
+            Destroy(effect, 0.5f); // 0.5초 후 자동 소멸 (프리팹 설정 미비 대비)
         }
     }
 

@@ -101,7 +101,7 @@ public class CombatSystem : MonoBehaviour
                 if (targetState.currentTeam.Value == playerState.currentTeam.Value) continue;
 
                 int damage = CalculateDamage(basicAttackMultiplier, targetState);
-                SendDamage(targetState, damage);
+                SendDamage(targetState, damage, hit.point);
                 Debug.Log($"기본 공격! {damage} 데미지 적중!");
                 return; // 최초의 유효한 대상 하나만 타격
             }
@@ -160,7 +160,7 @@ public class CombatSystem : MonoBehaviour
                 if (targetState.currentTeam.Value == playerState.currentTeam.Value) continue;
 
                 int damage = CalculateDamage(skill.damageMultiplier, targetState);
-                SendDamage(targetState, damage);
+                SendDamage(targetState, damage, hit.point);
                 Debug.Log($"[{skill.skillName}] 단일 공격! {damage} 데미지!");
                 return; // 최초의 유효한 대상 하나만 타격
             }
@@ -181,7 +181,7 @@ public class CombatSystem : MonoBehaviour
                 if (targetState.currentTeam.Value == playerState.currentTeam.Value) continue;
 
                 int damage = CalculateDamage(skill.damageMultiplier, targetState);
-                SendDamage(targetState, damage);
+                SendDamage(targetState, damage, col.ClosestPoint(center)); // 가장 가까운 표면 지점을 타격 지점으로 전달
                 hitCount++;
             }
         }
@@ -218,23 +218,27 @@ public class CombatSystem : MonoBehaviour
     // =========================================================================
     // 데미지 전송 (PlayerState의 ServerRpc를 통해)
     // =========================================================================
-    private void SendDamage(PlayerState target, int damage)
+    // 서버 RPC 호출 위임 (타격 지점 포함)
+    private void SendDamage(PlayerState target, int damage, Vector3 hitPosition)
     {
         if (playerState != null && target != null)
         {
-            playerState.AttackTargetServerRpc(target.NetworkObject, damage);
+            playerState.AttackTargetServerRpc(target.NetworkObject, damage, hitPosition);
         }
     }
 
     // =========================================================================
     // 외부에서 호출 가능한 데미지 적용 (FighterSkillExecutor 등에서 사용)
     // =========================================================================
-    public void DealDamageToTarget(PlayerState target, float skillMultiplier, string skillName)
+    // 외부에서 호출 가능한 데미지 적용 (FighterSkillExecutor 등에서 사용)
+    public void DealDamageToTarget(PlayerState target, float skillMultiplier, string skillName, Vector3 hitPosition = default)
     {
         if (target == null) return;
 
         int damage = CalculateDamage(skillMultiplier, target);
-        SendDamage(target, damage);
+        // hitPosition이 기본값이면 대상의 몸통(Vector3.up) 지점 사용
+        Vector3 finalHitPos = hitPosition == default ? target.transform.position + Vector3.up : hitPosition;
+        SendDamage(target, damage, finalHitPos);
         Debug.Log($"[{skillName}] {damage} 데미지!");
     }
 
