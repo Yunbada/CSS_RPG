@@ -7,13 +7,20 @@ public enum PlayerClassType
     Fighter,    // 무투가
     Swordsman,  // 검사
     Gunner,     // 거너 (유일한 총기 사용)
-    Mage        // 마법사
+    Mage,       // 마법사
+    Paladin     // 성기사
 }
 
 public class PlayerClass : NetworkBehaviour
 {
     public NetworkVariable<PlayerClassType> currentClass = new NetworkVariable<PlayerClassType>(
         PlayerClassType.Fighter,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    public NetworkVariable<int> awakeningLevel = new NetworkVariable<int>(
+        0, // 0: 노각성, 1: 1차 각성, 2: 2차 각성
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server
     );
@@ -54,6 +61,7 @@ public class PlayerClass : NetworkBehaviour
         if (IsServer)
         {
             currentClass.Value = newClass;
+            awakeningLevel.Value = 0; // 전직 시 각성 초기화
             ApplyClassBaseStats(newClass);
             SaveDataClientRpc((int)newClass); // Server also needs to trigger save for itself
         }
@@ -63,10 +71,30 @@ public class PlayerClass : NetworkBehaviour
         }
     }
 
+    public void SetAwakening(int newLevel)
+    {
+        if (IsServer)
+        {
+            awakeningLevel.Value = newLevel;
+        }
+        else
+        {
+            SetAwakeningServerRpc(newLevel);
+        }
+    }
+
+    [ServerRpc]
+    public void SetAwakeningServerRpc(int newLevel)
+    {
+        awakeningLevel.Value = newLevel;
+        Debug.Log($"서버에서 각성 레벨 {newLevel}로 변경됨");
+    }
+
     [ServerRpc]
     public void ChangeClassServerRpc(PlayerClassType newClass)
     {
         currentClass.Value = newClass;
+        awakeningLevel.Value = 0; // 전직 시 각성 초기화
         ApplyClassBaseStats(newClass);
         SaveDataClientRpc((int)newClass);
     }
@@ -103,6 +131,9 @@ public class PlayerClass : NetworkBehaviour
                 break;
             case PlayerClassType.Mage:
                 Debug.Log("마법사 마법 투척! (원거리)");
+                break;
+            case PlayerClassType.Paladin:
+                Debug.Log("성기사 기본 타격! (근접)");
                 break;
             case PlayerClassType.None:
             default:

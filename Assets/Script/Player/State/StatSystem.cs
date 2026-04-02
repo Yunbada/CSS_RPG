@@ -12,7 +12,8 @@ public enum StatType
     CritRate,
     MaxHealth,
     ExpBonus,
-    GoldBonus
+    GoldBonus,
+    ArmorPenetration // 추가: 방어구 관통력 (기본 0.5)
 }
 
 public class StatModifier
@@ -130,7 +131,8 @@ public class StatSystem : MonoBehaviour
             { StatType.CritRate, new Stat(5f) },     // 기본 치확 5%
             { StatType.MaxHealth, new Stat(100f) },
             { StatType.ExpBonus, new Stat(100f) },
-            { StatType.GoldBonus, new Stat(100f) }
+            { StatType.GoldBonus, new Stat(100f) },
+            { StatType.ArmorPenetration, new Stat(0.5f) } // 기본 방관 0.5% 추가 데미지용
         };
     }
 
@@ -139,5 +141,20 @@ public class StatSystem : MonoBehaviour
         if (stats.ContainsKey(type))
             return stats[type].Value;
         return 0f;
+    }
+
+    public void AddModifier(StatType type, StatModifier mod)
+    {
+        if (stats.ContainsKey(type)) stats[type].AddModifier(mod);
+    }
+
+    public void RemoveModifier(StatType type, StatModifier mod)
+    {
+        if (stats.ContainsKey(type)) stats[type].RemoveModifier(mod);
+    }
+
+    public void RemoveAllModifiersFromSource(StatType type, object source)
+    {
+        if (stats.ContainsKey(type)) stats[type].RemoveAllModifiersFromSource(source);
     }
 }

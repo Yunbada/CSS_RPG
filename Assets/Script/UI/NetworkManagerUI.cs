@@ -3,15 +3,7 @@ using Unity.Netcode;
 
 public class NetworkManagerUI : MonoBehaviour
 {
-    private bool isLoggedIn = false;
-    private bool isRegisterMode = false;
-    
-    // Auth variables
-    private string inputId = "";
-    private string inputPw = "";
-    private string authMessage = "";
-    
-    private GUIStyle headerStyle;
+    // Legacy fields removed
 
     [Header("UI Panels")]
     public GameObject authPanel;
@@ -25,7 +17,7 @@ public class NetworkManagerUI : MonoBehaviour
     private void Awake()
     {
         // CsvDatabase가 없다면 자동 추가 (서버 연동 전 MVP 용)
-        if (FindObjectOfType<CsvDatabase>() == null)
+        if (FindFirstObjectByType<CsvDatabase>() == null)
         {
             gameObject.AddComponent<CsvDatabase>();
         }

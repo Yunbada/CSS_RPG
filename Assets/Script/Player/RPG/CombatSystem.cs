@@ -22,10 +22,13 @@ public class CombatSystem : MonoBehaviour
     private SkillSystem skillSystem;
     private Camera playerCamera;
 
-    // 전직별 스킬 실행기
-    private FighterSkillExecutor fighterExecutor;
+    // 전직별 스킬 실행기 (인터페이스를 통한 추상화 OCP/DIP 적용)
+    private ISkillExecutor currentSkillExecutor;
 
     private bool isInitialized = false;
+
+    // 총 데미지 카운터 (내가 때린 누적 데미지)
+    public int TotalDamageDealt { get; private set; } = 0;
 
     private void Awake()
     {
@@ -33,11 +36,33 @@ public class CombatSystem : MonoBehaviour
         playerClass = GetComponent<PlayerClass>();
         playerState = GetComponentInParent<PlayerState>();
         statSystem = GetComponent<StatSystem>();
+
+        // 핵심 버그 수정: RPG_System이 루트에서 이탈하는 것을 원천 차단 (로컬 좌표 0 락)
+        transform.localPosition = Vector3.zero;
+        transform.localRotation = Quaternion.identity;
     }
 
-    /// <summary>
-    /// PlayerClass.OnNetworkSpawn()에서 명시적으로 호출됩니다.
-    /// </summary>
+    private void OnEnable()
+    {
+        if (playerClass != null) 
+            playerClass.currentClass.OnValueChanged += OnClassChanged;
+    }
+
+    private void OnDisable()
+    {
+        if (playerClass != null) 
+            playerClass.currentClass.OnValueChanged -= OnClassChanged;
+    }
+
+    private void OnClassChanged(PlayerClassType oldClass, PlayerClassType newClass)
+    {
+        // 로컬 플레이어 등 소유권이 있는 클라이언트만 이펙터 교체
+        if (playerClass.IsOwner)
+        {
+            UpdateSkillExecutor();
+        }
+    }
+
     public void InitializeCombatSystem()
     {
         skillSystem = GetComponent<SkillSystem>();
@@ -45,18 +70,52 @@ public class CombatSystem : MonoBehaviour
         var cam = GetComponentInParent<PlayerMovement>()?.GetComponentInChildren<Camera>(true);
         if (cam != null) playerCamera = cam;
 
-        // 무투가 스킬 실행기 자동 부착 및 초기화
-        fighterExecutor = GetComponent<FighterSkillExecutor>();
-        if (fighterExecutor == null)
-            fighterExecutor = gameObject.AddComponent<FighterSkillExecutor>();
-        fighterExecutor.Initialize(this, playerState);
+        UpdateSkillExecutor();
 
         isInitialized = true;
         Debug.Log("[CombatSystem] 초기화 완료!");
     }
 
-    // 스킬 사용 중 여부 (FighterSkillExecutor에서 제어)
-    public bool IsUsingSkill => fighterExecutor != null && fighterExecutor.isUsingSkill;
+    public void UpdateSkillExecutor()
+    {
+        // 기존 실행기 제거 (새로운 직업군으로 전직/접속 시)
+        var oldExecutors = GetComponents<ISkillExecutor>();
+        foreach (var exec in oldExecutors) 
+        {
+            Destroy((MonoBehaviour)exec);
+        }
+
+        PlayerClassType classType = playerClass.currentClass.Value;
+        switch (classType)
+        {
+            case PlayerClassType.Fighter: currentSkillExecutor = gameObject.AddComponent<FighterSkillExecutor>(); break;
+            case PlayerClassType.Swordsman: currentSkillExecutor = gameObject.AddComponent<SwordsmanSkillExecutor>(); break;
+            case PlayerClassType.Mage: currentSkillExecutor = gameObject.AddComponent<MageSkillExecutor>(); break;
+            case PlayerClassType.Paladin: currentSkillExecutor = gameObject.AddComponent<PaladinSkillExecutor>(); break;
+            // 미구현 직업들은 임시로 무투가 혹은 파이터가 작동하도록 처리
+            case PlayerClassType.Gunner: currentSkillExecutor = gameObject.AddComponent<FighterSkillExecutor>(); break;
+            case PlayerClassType.None: default: break; 
+        }
+
+        if (currentSkillExecutor != null)
+        {
+            currentSkillExecutor.Initialize(this, playerState);
+            Debug.Log($"[CombatSystem] 스킬 실행기 {currentSkillExecutor.GetType().Name} 할당 완료.");
+        }
+    }
+
+    // 전투 상태 머신 (FSM)
+    public CombatState CurrentState { get; private set; } = CombatState.Idle;
+
+    public void ChangeState(CombatState newState)
+    {
+        if (CurrentState == CombatState.Dead) return;
+        CurrentState = newState;
+        Debug.Log($"[CombatSystem] 상태 변경: {newState}");
+    }
+
+    // 스킬 사용 중 여부 (FSM 기반 하위 호환성)
+    public bool IsUsingSkill => CurrentState == CombatState.SkillExecuting || CurrentState == CombatState.SkillCasting;
 
     private void Update()
     {
@@ -67,7 +126,7 @@ public class CombatSystem : MonoBehaviour
             basicAttackTimer -= Time.deltaTime;
 
         // 전직 메뉴 열려있으면 공격 차단
-        var classCtrl = FindObjectOfType<ClassSelectionController>();
+        var classCtrl = FindFirstObjectByType<ClassSelectionController>();
         if (classCtrl != null && classCtrl.panel != null && classCtrl.panel.activeSelf)
             return;
 
@@ -88,23 +147,42 @@ public class CombatSystem : MonoBehaviour
     private void PerformBasicAttack()
     {
         if (playerCamera == null) return;
+        StartCoroutine(BasicAttackCoroutine());
+    }
+
+    private System.Collections.IEnumerator BasicAttackCoroutine()
+    {
+        ChangeState(CombatState.BasicAttacking);
 
         Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
         
-        // SphereCastAll을 사용하여 타격 범위를 후하게 판정 (반경 1m 캡슐 형태 전방 투사)
-        var hits = Physics.SphereCastAll(ray, 1.0f, basicAttackRange);
+        // SphereCastAll을 사용하여 타격 범위를 후하게 판정 (반경 1.5m 캡슐 형태 전방 투사)
+        var hits = Physics.SphereCastAll(ray, 1.5f, basicAttackRange);
+        var damaged = new System.Collections.Generic.HashSet<IDamageable>();
+        
         foreach (var hit in hits)
         {
-            var targetState = FindPlayerState(hit.collider.gameObject);
-            if (targetState != null && targetState != playerState)
+            var targetState = FindDamageable(hit.collider.gameObject);
+            if (targetState != null && (Object)targetState != (Object)playerState)
             {
-                if (targetState.currentTeam.Value == playerState.currentTeam.Value) continue;
+                if (!playerState.IsEnemy(targetState.CurrentTeam)) continue;
 
-                int damage = CalculateDamage(basicAttackMultiplier, targetState);
-                SendDamage(targetState, damage, hit.point);
-                Debug.Log($"기본 공격! {damage} 데미지 적중!");
-                return; // 최초의 유효한 대상 하나만 타격
+                if (damaged.Add(targetState)) // 중복 타격 방지
+                {
+                    int damage = CalculateDamage(basicAttackMultiplier, targetState);
+                    SendDamage(targetState, damage, hit.point);
+                    Debug.Log($"기본 공격! 다중 {damage} 데미지 적중!");
+                }
             }
+        }
+
+        // 추후 애니메이션 이벤트(Animation Event)로 대체될 하드코딩 딜레이
+        yield return new WaitForSeconds(0.25f);
+        
+        // 만약 피격(Stun) 등으로 상태가 변형되지 않았다면 Idle로 복구
+        if (CurrentState == CombatState.BasicAttacking)
+        {
+            ChangeState(CombatState.Idle);
         }
     }
 
@@ -122,11 +200,10 @@ public class CombatSystem : MonoBehaviour
         if (IsUsingSkill) return;
 
         // ====== 전직별 전용 스킬 실행기 위임 ======
-        // 좀비가 아닌 인간 무투가일 때만 무투가 스킬 실행
-        if (playerState != null && playerState.currentTeam.Value == Team.Human && 
-            playerClass != null && playerClass.currentClass.Value == PlayerClassType.Fighter && fighterExecutor != null)
+        // 좀비가 아닌 인간일 때 인터페이스를 통한 스킬 실행
+        if (playerState != null && playerState.currentTeam.Value == Team.Human && currentSkillExecutor != null)
         {
-            ExecuteFighterSkill(skillIndex);
+            currentSkillExecutor.ExecuteSkill(skillIndex, skill);
             return;
         }
 
@@ -154,10 +231,10 @@ public class CombatSystem : MonoBehaviour
         var hits = Physics.SphereCastAll(ray, 1.0f, range);
         foreach (var hit in hits)
         {
-            var targetState = FindPlayerState(hit.collider.gameObject);
-            if (targetState != null && targetState != playerState)
+            var targetState = FindDamageable(hit.collider.gameObject);
+            if (targetState != null && (Object)targetState != (Object)playerState)
             {
-                if (targetState.currentTeam.Value == playerState.currentTeam.Value) continue;
+                if (targetState.CurrentTeam == playerState.currentTeam.Value) continue;
 
                 int damage = CalculateDamage(skill.damageMultiplier, targetState);
                 SendDamage(targetState, damage, hit.point);
@@ -175,10 +252,10 @@ public class CombatSystem : MonoBehaviour
         int hitCount = 0;
         foreach (var col in hits)
         {
-            var targetState = FindPlayerState(col.gameObject);
-            if (targetState != null && targetState != playerState)
+            var targetState = FindDamageable(col.gameObject);
+            if (targetState != null && (Object)targetState != (Object)playerState)
             {
-                if (targetState.currentTeam.Value == playerState.currentTeam.Value) continue;
+                if (targetState.CurrentTeam == playerState.currentTeam.Value) continue;
 
                 int damage = CalculateDamage(skill.damageMultiplier, targetState);
                 SendDamage(targetState, damage, col.ClosestPoint(center)); // 가장 가까운 표면 지점을 타격 지점으로 전달
@@ -193,13 +270,13 @@ public class CombatSystem : MonoBehaviour
     // =========================================================================
     // 데미지 공식
     // =========================================================================
-    public int CalculateDamage(float skillMultiplier, PlayerState target)
+    public int CalculateDamage(float skillMultiplier, IDamageable target)
     {
         float attack = statSystem != null ? statSystem.GetStat(StatType.Attack) : 100f;
         float critRate = statSystem != null ? statSystem.GetStat(StatType.CritRate) : 5f;
         float critDmg = statSystem != null ? statSystem.GetStat(StatType.CritDamage) : 150f;
 
-        var targetStat = target.GetComponent<StatSystem>();
+        var targetStat = target.EntityTransform.GetComponent<StatSystem>();
         float defense = targetStat != null ? targetStat.GetStat(StatType.Defense) : 100f;
 
         float baseDamage = attack * skillMultiplier;
@@ -212,6 +289,11 @@ public class CombatSystem : MonoBehaviour
             Debug.Log("★ 크리티컬 히트! ★");
         }
 
+        // 방어구 관통력 (추가 데미지 계수)
+        float armorPen = statSystem != null ? statSystem.GetStat(StatType.ArmorPenetration) : 0f;
+        float bonusDamage = afterDefense * (armorPen / 100f); // 수치의 % 비율만큼 타격 시 고정 추가 데미지
+        afterDefense += bonusDamage;
+
         return Mathf.Max(1, Mathf.RoundToInt(afterDefense));
     }
 
@@ -219,62 +301,83 @@ public class CombatSystem : MonoBehaviour
     // 데미지 전송 (PlayerState의 ServerRpc를 통해)
     // =========================================================================
     // 서버 RPC 호출 위임 (타격 지점 포함)
-    private void SendDamage(PlayerState target, int damage, Vector3 hitPosition)
+    private void SendDamage(IDamageable target, int damage, Vector3 hitPosition)
     {
         if (playerState != null && target != null)
         {
-            playerState.AttackTargetServerRpc(target.NetworkObject, damage, hitPosition);
+            playerState.AttackTargetServerRpc(target.GetNetworkObject(), damage, hitPosition);
+            TotalDamageDealt += damage; // 누적 데미지 기록
+            
+            // 성기사 방패 에너지 후킹 (리플렉션 또는 빠른 캐스팅)
+            if (currentSkillExecutor is PaladinSkillExecutor paladin)
+            {
+                paladin.AddShieldEnergy(5);
+            }
         }
     }
 
     // =========================================================================
     // 외부에서 호출 가능한 데미지 적용 (FighterSkillExecutor 등에서 사용)
     // =========================================================================
-    // 외부에서 호출 가능한 데미지 적용 (FighterSkillExecutor 등에서 사용)
-    public void DealDamageToTarget(PlayerState target, float skillMultiplier, string skillName, Vector3 hitPosition = default)
+    public void DealDamageToTarget(IDamageable target, float skillMultiplier, string skillName, Vector3 hitPosition = default)
     {
         if (target == null) return;
 
         int damage = CalculateDamage(skillMultiplier, target);
         // hitPosition이 기본값이면 대상의 몸통(Vector3.up) 지점 사용
-        Vector3 finalHitPos = hitPosition == default ? target.transform.position + Vector3.up : hitPosition;
+        Vector3 finalHitPos = hitPosition == default ? target.EntityTransform.position + Vector3.up : hitPosition;
         SendDamage(target, damage, finalHitPos);
         Debug.Log($"[{skillName}] {damage} 데미지!");
     }
 
-    // =========================================================================
-    // 무투가 전용 스킬 라우터
-    // =========================================================================
-    private void ExecuteFighterSkill(int skillIndex)
+    public void ResetTotalDamage()
     {
-        switch (skillIndex)
-        {
-            case 0: fighterExecutor.Skill_JeongGwon(); break;
-            case 1: fighterExecutor.Skill_SeungCheon(); break;
-            case 2: fighterExecutor.Skill_BackStep(); break;
-            case 3: fighterExecutor.Skill_PaSweGwon(); break;
-            case 4: fighterExecutor.Skill_PungGak(); break;
-            case 5: fighterExecutor.Skill_YeonPa(); break;
-            case 6: fighterExecutor.Skill_BunGaeChum(); break;
-            case 7: fighterExecutor.Skill_YeonTan(); break;
-            case 8: fighterExecutor.Skill_JinGongNanMu(); break;
-        }
+        TotalDamageDealt = 0;
     }
 
     // =========================================================================
-    // 유틸리티: Collider 소유자의 PlayerState 찾기
-    // PlayerState가 루트가 아닌 자식 객체(RPG_Systems)에 있으므로
-    // GetComponentInParent만으로는 찾을 수 없음 → 위+아래 모두 검색
+    // 디버그 범위 시각화 헬퍼 (임시 구체 생성 후 지우기)
     // =========================================================================
-    public static PlayerState FindPlayerState(GameObject obj)
+    public static void DrawDebugSphere(Vector3 center, float radius, float duration = 1.0f, Color? color = null)
     {
-        // 1) 자기 자신이나 부모에서 찾기
-        var state = obj.GetComponentInParent<PlayerState>();
-        if (state != null) return state;
+        GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        sphere.transform.position = center;
+        sphere.transform.localScale = Vector3.one * radius * 2f;
 
-        // 2) 루트를 거쳐 자식에서 찾기
+        // Collider 제거 (타격 판정에 영향 X)
+        var col = sphere.GetComponent<Collider>();
+        if (col != null) Destroy(col);
+
+        // 반투명 색상 설정
+        var renderer = sphere.GetComponent<Renderer>();
+        if (renderer != null)
+        {
+            Color c = color ?? new Color(1f, 0.3f, 0f, 0.25f);
+            Material mat = new Material(Shader.Find("Sprites/Default"));
+            mat.color = c;
+            renderer.material = mat;
+        }
+
+        Destroy(sphere, duration);
+    }
+
+    public static void DrawDebugLine(Vector3 start, Vector3 end, float duration = 1.0f)
+    {
+        Debug.DrawLine(start, end, Color.red, duration);
+    }
+
+
+
+    // =========================================================================
+    // 유틸리티: Collider 소유자의 IDamageable 찾기
+    // =========================================================================
+    public static IDamageable FindDamageable(GameObject obj)
+    {
+        var damageable = obj.GetComponentInParent<IDamageable>();
+        if (damageable != null) return damageable;
+
         var root = obj.transform.root;
-        state = root.GetComponentInChildren<PlayerState>();
-        return state;
+        damageable = root.GetComponentInChildren<IDamageable>();
+        return damageable;
     }
 }

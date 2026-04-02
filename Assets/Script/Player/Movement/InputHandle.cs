@@ -30,6 +30,7 @@ public class InputHandle : MonoBehaviour
     public bool runInput { get; private set;}
     public int numInput { get; private set;}
     public bool attackInput { get; private set;}
+    public bool toggleDebugMenuInput { get; private set;}
     #endregion 
 
 
@@ -43,6 +44,7 @@ public class InputHandle : MonoBehaviour
         mouseyInput = Input.GetAxis("Mouse Y");
         numInput = KeyNo();
         attackInput = Input.GetMouseButtonDown(0);
+        toggleDebugMenuInput = Input.GetKeyDown(KeyCode.N);
     }
 
     int KeyNo()

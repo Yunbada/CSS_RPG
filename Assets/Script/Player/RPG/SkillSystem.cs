@@ -121,15 +121,50 @@ public class SkillSystem : MonoBehaviour
         }
 
         // 전직 UI가 켜져있을 땐 스킬 단축키 입력을 무시
-        var classCtrl = FindObjectOfType<ClassSelectionController>();
+        var classCtrl = FindFirstObjectByType<ClassSelectionController>();
         bool isUIOpen = classCtrl != null && classCtrl.panel != null && classCtrl.panel.activeSelf;
+        
+        var hud = FindFirstObjectByType<UIGameHUD>();
+        bool isInvOpen = hud != null && hud.inventoryPanel != null && hud.inventoryPanel.activeSelf;
 
         if (inputHandle != null && !isUIOpen)
         {
             int pressedKey = inputHandle.numInput;
             if (pressedKey >= 0 && pressedKey < 9)
             {
-                TryUseSkill(pressedKey);
+                if (isInvOpen)
+                {
+                    // 인벤토리용 더미 디버그 조작
+                    if (pressedKey == 0) // 숫자 1번
+                    {
+                        var exp = GetComponent<PlayerExperience>();
+                        if (exp != null) exp.SetCheatLevelServerRpc(100);
+                        Debug.Log("디버그: 인벤토리 열림 상태에서 1번 단축키로 레벨 100 설정!");
+                    }
+                    else if (pressedKey == 1) // 숫자 2번
+                    {
+                        playerClass.SetAwakeningServerRpc(1);
+                        Debug.Log("디버그: 인벤토리 열림 상태에서 2번 단축키로 1차 각성 설정!");
+                    }
+                    else if (pressedKey == 2) // 숫자 3번
+                    {
+                        playerClass.SetAwakeningServerRpc(2);
+                        Debug.Log("디버그: 인벤토리 열림 상태에서 3번 단축키로 2차 각성 설정!");
+                    }
+                    else if (pressedKey == 3) // 숫자 4번
+                    {
+                        // 전직, 레벨, 경험치, 각성 모두 초기화
+                        playerClass.ChangeClassServerRpc(PlayerClassType.None);
+                        playerClass.SetAwakeningServerRpc(0);
+                        var exp = GetComponent<PlayerExperience>();
+                        if (exp != null) exp.SetCheatLevelServerRpc(1);
+                        Debug.Log("디버그: 전직/레벨/경험치/각성 모두 초기화!");
+                    }
+                }
+                else
+                {
+                    TryUseSkill(pressedKey);
+                }
             }
         }
     }
@@ -140,6 +175,26 @@ public class SkillSystem : MonoBehaviour
         
         // 등록된 스킬이 없으면 리턴 (이름이 없는 경우)
         if (string.IsNullOrEmpty(currentSkills[index].skillName)) return;
+
+        // --- 각성 레벨에 따른 스킬 덱 차단 ---
+        int awkLevel = playerClass.awakeningLevel.Value;
+        var pExp = GetComponent<PlayerExperience>();
+        if (pExp != null)
+        {
+            if (pExp.Level.Value >= 90) awkLevel = Mathf.Max(awkLevel, 2);
+            else if (pExp.Level.Value >= 60) awkLevel = Mathf.Max(awkLevel, 1);
+        }
+
+        if ((index == 6 || index == 7) && awkLevel < 1)
+        {
+            Debug.Log("해당 스킬은 1차 각성(Lv.60) 이상 달성 시 해금됩니다.");
+            return;
+        }
+        if (index == 8 && awkLevel < 2)
+        {
+            Debug.Log("해당 스킬은 2차 각성(Lv.90) 이상 달성 시 해금됩니다.");
+            return;
+        }
 
         // 스킬 사용 중이면 추가 스킬 사용 차단
         var combat = GetComponent<CombatSystem>();
@@ -187,8 +242,10 @@ public class SkillSystem : MonoBehaviour
 
     private void UpdateHUD(int index)
     {
-        // 최적화를 위해 FindObjectOfType 사용 구조 유지 (로컬 클라이언트엔 1개만 존재함)
-        var hud = FindObjectOfType<UIGameHUD>();
+        if (playerState != null && !playerState.IsOwner) return;
+
+        // 최적화를 위해 FindFirstObjectByType 사용 구조 유지 (로컬 클라이언트엔 1개만 존재함)
+        var hud = FindFirstObjectByType<UIGameHUD>();
         if (hud != null && currentSkills[index] != null)
         {
             hud.UpdateSkillUI(index, currentSkills[index].skillName, currentSkills[index].currentCooldown, currentSkills[index].cooldownTime);
@@ -259,6 +316,19 @@ public class SkillSystem : MonoBehaviour
                 SetSkill(8, "메테오 스트라이크 (궁극기)", 60.0f, "화면을 뒤덮는 운석 낙하");
                 break;
                 
+            case PlayerClassType.Paladin: // 성기사
+                classNameKor = "성기사 (Paladin)";
+                SetSkill(0, "전진베기", 1.0f, "바라보는 방향 이동 후 넉백 타격", 1.0f, 1.5f, 0f, false);
+                SetSkill(1, "축복의 방패", 3.0f, "에너지량에 비례해 돌진강타 혹은 방패투척 스턴", 1.5f, 2.5f, 0f, false);
+                SetSkill(2, "빛의 징벌", 6.0f, "주변을 내리쳐 적을 띄우고 화상을 입힘", 2.0f, 4f, 0f, false);
+                SetSkill(3, "천상의 날개", 8.0f, "수직 비행 후 원하는 곳을 강하게 내리찍음", 2.5f, 5f, 0f, false);
+                SetSkill(4, "심판", 10.0f, "공중에 뜬 적을 베어버리는 추가 콤보", 2.5f, 7f, 0f, false);
+                SetSkill(5, "빛의 성창", 12.0f, "적을 관통해 이속을 감소시키는 빛의 창", 2.0f, 0f, 0f, false);
+                SetSkill(6, "빛의 율법 (1차 각성)", 15.0f, "장판을 소환해 지속 피해와 둔화 부여", 1.0f, 5f, 0f, false);
+                SetSkill(7, "불굴의 의지 (1차 각성)", 30.0f, "15초간 공격/방어/치피/방관 자가 버프", 0f, 0f, 0f, true);
+                SetSkill(8, "빛의 사도 (궁극기)", 60.0f, "상공에서 20m 공간에 무수한 창을 꽂아 징벌", 3.0f, 20f, 0f, false);
+                break;
+                
             default: // 직업이 없을 때 (또는 초기 상태)
                 classNameKor = "미전직 (단축키 C)";
                 SetSkill(0, "⭐ 응급 치료", 2.0f, "체력을 50 회복합니다."); // 전 직업 공통
@@ -266,11 +336,14 @@ public class SkillSystem : MonoBehaviour
         }
 
         // 스킬셋이 변경되었으므로 전체 UI를 한 번 초기화 갱신합니다.
-        var hud = FindObjectOfType<UIGameHUD>();
-        if (hud != null)
+        if (playerState != null && playerState.IsOwner)
         {
-            hud.UpdateClassName(classNameKor);
-            for (int i = 0; i < 9; i++) UpdateHUD(i);
+            var hud = FindFirstObjectByType<UIGameHUD>();
+            if (hud != null)
+            {
+                hud.UpdateClassName(classNameKor);
+                for (int i = 0; i < 9; i++) UpdateHUD(i);
+            }
         }
     }
 
@@ -299,11 +372,14 @@ public class SkillSystem : MonoBehaviour
         }
 
         // UI 갱신
-        var hud = FindObjectOfType<UIGameHUD>();
-        if (hud != null)
+        if (playerState != null && playerState.IsOwner)
         {
-            hud.UpdateClassName(classNameKor);
-            for (int i = 0; i < 9; i++) UpdateHUD(i);
+            var hud = FindFirstObjectByType<UIGameHUD>();
+            if (hud != null)
+            {
+                hud.UpdateClassName(classNameKor);
+                for (int i = 0; i < 9; i++) UpdateHUD(i);
+            }
         }
     }
 

@@ -7,7 +7,7 @@ using System.Collections;
 /// CombatSystem.ExecuteSkillAttack()에서 무투가 전용 스킬일 때 이 클래스로 위임합니다.
 /// 각 스킬은 코루틴으로 이동/타격을 시간에 걸쳐 수행합니다.
 /// </summary>
-public class FighterSkillExecutor : MonoBehaviour
+public class FighterSkillExecutor : MonoBehaviour, ISkillExecutor
 {
     private CombatSystem combatSystem;
     private PlayerState playerState;
@@ -25,18 +25,49 @@ public class FighterSkillExecutor : MonoBehaviour
         {
             playerCamera = movement.GetComponentInChildren<Camera>(true);
         }
+
+        // 혹시라도 자식 객체가 루트에서 분리된 채 저장/동기화됐을 경우를 대비하여 원점 복귀
+        transform.localPosition = Vector3.zero;
+        transform.localRotation = Quaternion.identity;
     }
 
     // =========================================================================
-    // 무적 상태 제어 (스킬 사용 중 데미지 면역 + 사용 중 플래그)
+    // 스킬 실행 및 FSM 상태 연동
     // =========================================================================
-    public bool isUsingSkill = false;
+
+    public void ExecuteSkill(int skillIndex, SkillData skill)
+    {
+        switch (skillIndex)
+        {
+            case 0: Skill_JeongGwon(); break;
+            case 1: Skill_SeungCheon(); break;
+            case 2: Skill_BackStep(); break;
+            case 3: Skill_PaSweGwon(); break;
+            case 4: Skill_PungGak(); break;
+            case 5: Skill_YeonPa(); break;
+            case 6: Skill_BunGaeChum(); break;
+            case 7: Skill_YeonTan(); break;
+            case 8: Skill_JinGongNanMu(); break;
+        }
+    }
 
     private void SetInvincible(bool value)
     {
-        isUsingSkill = value;
+        if (combatSystem != null)
+        {
+            combatSystem.ChangeState(value ? CombatState.SkillExecuting : CombatState.Idle);
+        }
+
         if (playerState != null)
             playerState.SetInvincibleServerRpc(value);
+    }
+
+    private void SpawnVFX(int vfxType, Vector3 position, Quaternion rotation)
+    {
+        if (playerState != null)
+        {
+            playerState.SpawnSkillVFXServerRpc(vfxType, position, rotation);
+        }
     }
 
     // =========================================================================
@@ -50,8 +81,11 @@ public class FighterSkillExecutor : MonoBehaviour
     private IEnumerator JeongGwonCoroutine()
     {
         SetInvincible(true);
+        Transform rootTransform = charCtrl.transform;
+        // 전방 1.5m 지점에 충격파 이펙트 (Index 0)
+        SpawnVFX(0, rootTransform.position + rootTransform.forward * 1.5f + Vector3.up * 1.2f, rootTransform.rotation);
         RaycastAttack(2f, 1.2f, "정권 찌르기");
-        yield return new WaitForSeconds(0.3f); // 짧은 공격 모션
+        yield return new WaitForSeconds(0.3f); 
         SetInvincible(false);
     }
 
@@ -66,8 +100,11 @@ public class FighterSkillExecutor : MonoBehaviour
     private IEnumerator SeungCheonCoroutine()
     {
         SetInvincible(true);
-        // 전방 2m 타격
-        var target = RaycastAttack(2f, 2.0f, "승천권");
+        Transform rootTransform = charCtrl.transform;
+        // 전방 1.5m 지점에 상승 에너지 이펙트 (Index 1)
+        SpawnVFX(1, rootTransform.position + rootTransform.forward * 1.5f + Vector3.up * 0.5f, Quaternion.identity);
+        // 전방 2m 다수 타격
+        var targets = RaycastAttack(2f, 2.0f, "승천권");
 
         // 자신이 위로 뜀
         float elapsed = 0f;
@@ -75,10 +112,13 @@ public class FighterSkillExecutor : MonoBehaviour
         float liftHeight = 2f;
         float liftSpeed = liftHeight / duration;
 
-        // 적중한 대상이 있다면 대상도 함께 위로 띄움
-        if (target != null)
+        // 적중한 다수 모든 대상도 함께 위로 띄움
+        foreach (var targetItem in targets)
         {
-            target.KnockUpServerRpc(Vector3.up * liftSpeed, duration);
+            if (targetItem is PlayerState pTargetLift)
+            {
+                pTargetLift.KnockUpServerRpc(Vector3.up * liftSpeed, duration);
+            }
         }
 
         while (elapsed < duration)
@@ -109,7 +149,8 @@ public class FighterSkillExecutor : MonoBehaviour
         float duration = 0.2f;
         float distance = 2f;
         float speed = distance / duration;
-        Vector3 backDir = -transform.forward;
+        Transform rootTransform = charCtrl.transform;
+        Vector3 backDir = -rootTransform.forward;
 
         while (elapsed < duration)
         {
@@ -141,7 +182,8 @@ public class FighterSkillExecutor : MonoBehaviour
         float duration = 0.15f;
         float distance = 2f;
         float speed = distance / duration;
-        Vector3 fwd = transform.forward;
+        Transform rootTransform = charCtrl.transform;
+        Vector3 fwd = rootTransform.forward;
 
         while (elapsed < duration)
         {
@@ -151,8 +193,9 @@ public class FighterSkillExecutor : MonoBehaviour
             yield return null;
         }
 
-        // 도착 지점 주변 1m AoE
-        AreaAttack(transform.position, 1f, 2.5f, "파쇄권");
+        // 도착 지점 주변 1m AoE + 지면 파열 이펙트 (Index 3)
+        SpawnVFX(3, rootTransform.position + Vector3.up * 0.1f, Quaternion.identity);
+        AreaAttack(rootTransform.position, 1f, 2.5f, "파쇄권");
         SetInvincible(false);
     }
 
@@ -173,16 +216,19 @@ public class FighterSkillExecutor : MonoBehaviour
         float speed = distance / duration;
         float tickInterval = 0.3f;
         float tickTimer = 0f;
+        Transform rootTransform = charCtrl.transform;
 
         while (elapsed < duration)
         {
             if (charCtrl != null)
-                charCtrl.Move(transform.forward * speed * Time.deltaTime);
+                charCtrl.Move(rootTransform.forward * speed * Time.deltaTime);
 
             tickTimer += Time.deltaTime;
             if (tickTimer >= tickInterval)
             {
-                AreaAttack(transform.position, 1f, 1.5f, "풍각");
+                // 회전할 때마다 태풍의 눈 이펙트 발생 (Index 2)
+                SpawnVFX(2, rootTransform.position + Vector3.up * 0.2f, Quaternion.identity);
+                AreaAttack(rootTransform.position, 1f, 1.5f, "풍각");
                 tickTimer = 0f;
             }
 
@@ -208,12 +254,15 @@ public class FighterSkillExecutor : MonoBehaviour
         float tickInterval = 0.15f;
         float tickTimer = 0f;
         int hitCount = 0;
+        Transform rootTransform = charCtrl.transform;
 
         while (elapsed < duration)
         {
             tickTimer += Time.deltaTime;
             if (tickTimer >= tickInterval)
             {
+                // 공격 시마다 고속 잔상 이펙트 발생 (Index 6)
+                SpawnVFX(6, rootTransform.position + rootTransform.forward * 1.0f + Vector3.up * 1.0f, rootTransform.rotation);
                 RaycastAttack(2f, 0.5f, "연파");
                 hitCount++;
                 tickTimer = 0f;
@@ -236,7 +285,9 @@ public class FighterSkillExecutor : MonoBehaviour
     private IEnumerator BunGaeChumCoroutine()
     {
         SetInvincible(true);
-        var model = transform.Find("PlayerModel");
+        Transform rootTransform = charCtrl.transform;
+        
+        var model = rootTransform.Find("PlayerModel");
         if (model != null) model.gameObject.SetActive(false); // 모델 숨기기
 
         float elapsed = 0f;
@@ -250,12 +301,12 @@ public class FighterSkillExecutor : MonoBehaviour
             if (tickTimer >= tickInterval)
             {
                 // 주변 5m 범위 내의 적 찾기
-                Collider[] hits = Physics.OverlapSphere(transform.position, 5f);
-                System.Collections.Generic.List<PlayerState> targets = new System.Collections.Generic.List<PlayerState>();
+                Collider[] hits = Physics.OverlapSphere(rootTransform.position, 5f);
+                System.Collections.Generic.List<IDamageable> targets = new System.Collections.Generic.List<IDamageable>();
                 foreach (var col in hits)
                 {
-                    var target = CombatSystem.FindPlayerState(col.gameObject);
-                    if (target != null && target != playerState && target.currentTeam.Value != playerState.currentTeam.Value)
+                    var target = CombatSystem.FindDamageable(col.gameObject);
+                    if (target != null && (Object)target != (Object)playerState && playerState.IsEnemy(target.CurrentTeam))
                     {
                         targets.Add(target);
                     }
@@ -264,20 +315,26 @@ public class FighterSkillExecutor : MonoBehaviour
                 if (targets.Count > 0)
                 {
                     // 무작위 타겟 하나 선택하여 순간이동
-                    PlayerState randomTarget = targets[Random.Range(0, targets.Count)];
+                    IDamageable randomTarget = targets[Random.Range(0, targets.Count)];
                     
                     if (charCtrl != null) charCtrl.enabled = false;
                     
-                    Vector3 newPos = randomTarget.transform.position;
+                    Vector3 newPos = randomTarget.EntityTransform.position;
+                    // 적의 머리위나 발밑으로 순간이동하지 않도록 높이 보정 가능성 유지
                     newPos.x += Random.Range(-0.5f, 0.5f);
                     newPos.z += Random.Range(-0.5f, 0.5f);
-                    transform.position = newPos;
-                    transform.LookAt(randomTarget.transform);
+                    rootTransform.position = newPos; // 자식(RPG_System)이 아닌 루트 플레이어를 이동
+
+                    // Y축(상하) 회전을 방지하기 위해 바라보는 높이를 플레이어와 일치시킴
+                    Vector3 lookPos = randomTarget.EntityTransform.position;
+                    lookPos.y = rootTransform.position.y;
+                    rootTransform.LookAt(lookPos); // 회전도 루트 플레이어를 회전
                     
                     if (charCtrl != null) charCtrl.enabled = true;
 
-                    // 이동한 위치에서 타격
-                    AreaAttack(transform.position, 2f, 1.0f, "번개춤");
+                    // 이동한 타겟 위치에서 전격 폭발 이펙트 발생 (Index 4)
+                    SpawnVFX(4, rootTransform.position + Vector3.up * 1.0f, Quaternion.identity);
+                    AreaAttack(rootTransform.position, 2f, 1.0f, "번개춤");
                 }
 
                 tickTimer = 0f;
@@ -307,12 +364,15 @@ public class FighterSkillExecutor : MonoBehaviour
         float tickInterval = 0.12f;
         float tickTimer = 0f;
         int hitCount = 0;
+        Transform rootTransform = charCtrl.transform;
 
         while (elapsed < duration)
         {
             tickTimer += Time.deltaTime;
             if (tickTimer >= tickInterval)
             {
+                // 장풍 발사 시 에너지 구체 이펙트 발생 (Index 5)
+                SpawnVFX(5, rootTransform.position + rootTransform.forward * 1.5f + Vector3.up * 1.2f, rootTransform.rotation);
                 RaycastAttack(10f, 0.6f, "연탄"); // 장풍이므로 사거리 10m
                 hitCount++;
                 tickTimer = 0f;
@@ -335,6 +395,7 @@ public class FighterSkillExecutor : MonoBehaviour
     private IEnumerator JinGongNanMuCoroutine()
     {
         SetInvincible(true);
+        Transform rootTransform = charCtrl.transform;
         // 2초간 주변 5m 적들에게 틱 데미지 + 끌어당기기
         float elapsed = 0f;
         float pullDuration = 2f;
@@ -346,26 +407,29 @@ public class FighterSkillExecutor : MonoBehaviour
             tickTimer += Time.deltaTime;
             if (tickTimer >= tickInterval)
             {
+                // 주변 적 검색 시 태풍의 눈(흡입) 효과 (Index 2)
+                SpawnVFX(2, rootTransform.position + Vector3.up * 0.5f, Quaternion.identity);
+                
                 // 주변 5m 적 검색 및 끌어당기기
-                Collider[] hits = Physics.OverlapSphere(transform.position, 5f);
+                Collider[] hits = Physics.OverlapSphere(rootTransform.position, 5f);
                 foreach (var col in hits)
                 {
-                    var target = CombatSystem.FindPlayerState(col.gameObject);
-                    if (target != null && target != playerState && target.currentTeam.Value != playerState.currentTeam.Value)
+                    var target = CombatSystem.FindDamageable(col.gameObject);
+                    if (target != null && (Object)target != (Object)playerState && target.CurrentTeam != playerState.currentTeam.Value)
                     {
                         // 플레이어 방향으로 끌어당기는 벡터 계산
-                        Vector3 pullDir = (transform.position - target.transform.position).normalized;
+                        Vector3 pullDir = (rootTransform.position - target.EntityTransform.position).normalized;
                         // y축(위아래)은 유지
                         pullDir.y = 0; 
                         
                         // 넉업 함수를 재활용하여 강제 이동(끌어당기기) 적용
-                        target.KnockUpServerRpc(pullDir * 6f, tickInterval);
+                        if (target is PlayerState pTargetP) pTargetP.KnockUpServerRpc(pullDir * 6f, tickInterval);
                         
                         // 틱 데미지
                         if (combatSystem != null)
                         {
                             // 당겨지는 대상의 몸통 부분을 타격 지점으로 전달
-                            combatSystem.DealDamageToTarget(target, 0.3f, "진공난무(흡인)", col.ClosestPoint(transform.position));
+                            combatSystem.DealDamageToTarget(target, 0.3f, "진공난무(흡인)", col.ClosestPoint(rootTransform.position));
                         }
                     }
                 }
@@ -376,7 +440,7 @@ public class FighterSkillExecutor : MonoBehaviour
         }
 
         // 최종 강력한 타격
-        AreaAttack(transform.position, 4f, 4.0f, "진공난무(폭발)");
+        AreaAttack(rootTransform.position, 4f, 4.0f, "진공난무(폭발)");
         Debug.Log("진공난무 최종 타격!");
         SetInvincible(false);
     }
@@ -384,9 +448,10 @@ public class FighterSkillExecutor : MonoBehaviour
     // =========================================================================
     // 공용 공격 유틸리티
     // =========================================================================
-    private PlayerState RaycastAttack(float reqRange, float multiplier, string skillName)
+    private System.Collections.Generic.List<IDamageable> RaycastAttack(float reqRange, float multiplier, string skillName)
     {
-        if (playerCamera == null) return null;
+        var damagedTargets = new System.Collections.Generic.List<IDamageable>();
+        if (playerCamera == null) return damagedTargets;
 
         float range = reqRange + 1f; // 전체적으로 범위 1m 증가
         Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
@@ -394,20 +459,20 @@ public class FighterSkillExecutor : MonoBehaviour
         // 시각적 디버그 표시 (1초 유지)
         StartCoroutine(DrawDebugLineCoroutine(ray.origin, ray.origin + ray.direction * range, Color.red, 1f));
 
-        var hits = Physics.SphereCastAll(ray, 1.0f, range);
+        var hits = Physics.SphereCastAll(ray, 1.5f, range); // 범위 1.5m로 늘리고 다중타겟 활성화
         foreach (var hit in hits)
         {
-            var target = CombatSystem.FindPlayerState(hit.collider.gameObject);
-            if (target != null && target != playerState && target.currentTeam.Value != playerState.currentTeam.Value)
+            var target = CombatSystem.FindDamageable(hit.collider.gameObject);
+            if (target != null && (Object)target != (Object)playerState && playerState.IsEnemy(target.CurrentTeam))
             {
-                if (combatSystem != null)
+                if (!damagedTargets.Contains(target) && combatSystem != null)
                 {
                     combatSystem.DealDamageToTarget(target, multiplier, skillName, hit.point);
-                    return target; // 최초 유효 대상 하나만 반환
+                    damagedTargets.Add(target); // 타겟 전체 공격
                 }
             }
         }
-        return null;
+        return damagedTargets;
     }
 
     private void AreaAttack(Vector3 center, float reqRadius, float multiplier, string skillName)
@@ -419,8 +484,8 @@ public class FighterSkillExecutor : MonoBehaviour
         Collider[] hits = Physics.OverlapSphere(center, radius);
         foreach (var col in hits)
         {
-            var target = CombatSystem.FindPlayerState(col.gameObject);
-            if (target != null && target != playerState && target.currentTeam.Value != playerState.currentTeam.Value)
+            var target = CombatSystem.FindDamageable(col.gameObject);
+            if (target != null && (Object)target != (Object)playerState && playerState.IsEnemy(target.CurrentTeam))
             {
                 if (combatSystem != null)
                 {

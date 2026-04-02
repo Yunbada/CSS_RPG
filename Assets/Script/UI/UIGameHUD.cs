@@ -15,14 +15,15 @@ public class UIGameHUD : MonoBehaviour
     public Text[] skillTexts;
     public Text classNameText; // 추가된 전직 이름 텍스트
 
-    private void Update()
-    {
-        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsClient || NetworkManager.Singleton.LocalClient == null)
-            return;
+    [Header("Right Info")]
+    public Text expText; // 레벨 및 경험치 표시
+    public GameObject inventoryPanel; // N키로 열리는 인벤토리 컨테이너
+    public Text[] inventoryTexts; // 우측 번호 선택창 (임시)
 
-        UpdateMatchInfo();
-        UpdatePlayerInfo();
-    }
+    [Header("Center Info")]
+    public Text totalDamageText; // 크로스헤어 아래 누적 데미지 표시
+
+
 
     public void UpdateClassName(string className)
     {
@@ -47,7 +48,7 @@ public class UIGameHUD : MonoBehaviour
         int humanCount = 0;
         int zombieCount = 0;
         
-        foreach (var p in RoundManager.Instance.AllPlayers)
+        foreach (var p in PlayerState.AllPlayersList)
         {
             if (p != null)
             {
@@ -68,6 +69,7 @@ public class UIGameHUD : MonoBehaviour
         var state = localObj.GetComponentInChildren<PlayerState>();
         var skillCtrl = localObj.GetComponentInChildren<SkillController>();
         var pClass = localObj.GetComponentInChildren<PlayerClass>();
+        var pExp = localObj.GetComponentInChildren<PlayerExperience>();
 
         // HP Update
         if (hpText != null && state != null)
@@ -75,10 +77,27 @@ public class UIGameHUD : MonoBehaviour
             hpText.text = $"HP: {state.currentHealth.Value} / {state.maxHealth.Value}";
         }
 
+        // Exp / Level Update
+        if (expText != null && pExp != null)
+        {
+            int maxExp = pExp.Level.Value * 100;
+            expText.text = $"<Lv. {pExp.Level.Value}>\n<Exp: {pExp.CurrentExp.Value} / {maxExp}>";
+        }
+
+        // 누적 데미지 Update
+        if (totalDamageText != null)
+        {
+            var combat = localObj.GetComponentInChildren<CombatSystem>();
+            if (combat != null)
+            {
+                totalDamageText.text = $"DMG: {combat.TotalDamageDealt}";
+            }
+        }
+
         // 스킬 UI 업데이트는 이제 SkillSystem.cs에서 UpdateSkillUI()를 직접 호출하여 처리하므로 
         // 이곳에 있던 구형 폴링 업데이트 루프는 삭제되었습니다.
 
-        // Ammo Update
+        // Ammo / Shield Energy Update
         if (ammoText != null)
         {
             if (pClass != null && pClass.currentClass.Value == PlayerClassType.Gunner)
@@ -86,9 +105,40 @@ public class UIGameHUD : MonoBehaviour
                 ammoText.gameObject.SetActive(true);
                 ammoText.text = "Ammo: 30 / ∞";
             }
+            else if (pClass != null && pClass.currentClass.Value == PlayerClassType.Paladin)
+            {
+                ammoText.gameObject.SetActive(true);
+                int currentEnergy = 0;
+                var executor = localObj.GetComponentInChildren<PaladinSkillExecutor>();
+                if (executor != null)
+                {
+                    currentEnergy = executor.ShieldEnergy;
+                }
+                ammoText.text = $"충전량: {currentEnergy}%";
+            }
             else
             {
                 ammoText.gameObject.SetActive(false);
+            }
+        }
+    }
+
+    private void Update()
+    {
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsClient || NetworkManager.Singleton.LocalClient == null)
+            return;
+
+        UpdateMatchInfo();
+        UpdatePlayerInfo();
+
+        var localObj = NetworkManager.Singleton.LocalClient.PlayerObject;
+        if (localObj != null)
+        {
+            var inputHandle = localObj.GetComponent<InputHandle>();
+            // N 키로 인벤토리(목록) 패널 토글
+            if (inputHandle != null && inputHandle.toggleDebugMenuInput && inventoryPanel != null)
+            {
+                inventoryPanel.SetActive(!inventoryPanel.activeSelf);
             }
         }
     }

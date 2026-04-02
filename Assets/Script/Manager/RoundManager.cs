@@ -161,6 +161,34 @@ public class RoundManager : NetworkBehaviour
         currentState.Value = RoundState.RoundEnded;
         Debug.Log("Round Ended! Winner: " + winningTeam.ToString());
         
-        // TODO: 보상 지급 및 다음 라운드 준비 로직
+        // 보상 지급 및 다음 라운드 준비 로직 (3초 후 재시작)
+        Invoke(nameof(ResetRound), 3f);
+    }
+
+    private void ResetRound()
+    {
+        if (!IsServer) return;
+
+        foreach (var p in PlayerState.AllPlayersList)
+        {
+            if (p != null)
+            {
+                p.currentTeam.Value = Team.Human;
+                p.maxHealth.Value = 100; 
+                p.currentHealth.Value = 100; // 인간 체력 복구
+
+                // 스폰 포인트로 원대 복귀
+                var movement = p.GetComponentInParent<PlayerMovement>();
+                if (movement != null)
+                {
+                    var charCtrl = movement.GetComponent<UnityEngine.CharacterController>();
+                    if (charCtrl != null) charCtrl.enabled = false;
+                    movement.transform.position = new Vector3(Random.Range(-5f, 5f), 1f, Random.Range(-5f, 5f)); // 임의 스폰 마커
+                    if (charCtrl != null) charCtrl.enabled = true;
+                }
+            }
+        }
+        
+        StartRound(); // 라운드 타이머(3분) 재시작
     }
 }

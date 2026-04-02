@@ -56,6 +56,10 @@ public static class UIBuilder
         Text crosshair = CreateText("Crosshair", Vector2.zero, new Vector2(40, 40), 30, new Color(1f, 1f, 1f, 0.8f), TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
         crosshair.text = "+";
 
+        // 크로스헤어 바로 아래 (누적 데미지)
+        hud.totalDamageText = CreateText("TotalDamageText", new Vector2(0, -30), new Vector2(200, 40), 22, new Color(1f, 0.4f, 0.4f, 0.9f), TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+        hud.totalDamageText.text = "DMG: 0";
+
         // 중앙 상단 (타이머)
         hud.timerText = CreateText("TimerText", new Vector2(0, -50), new Vector2(400, 80), 60, Color.white, TextAnchor.UpperCenter, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
         
@@ -81,8 +85,36 @@ public static class UIBuilder
             hud.skillTexts[i] = CreateText($"Skill_{i+1}", new Vector2(50, 200 - (i * 50)), new Vector2(400, 50), 30, new Color(1f, 0.8f, 0f), TextAnchor.MiddleLeft, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
         }
 
+        // 우측 중앙 (레벨 및 경험치 표시)
+        hud.expText = CreateText("ExpLevelText", new Vector2(-50, 300), new Vector2(300, 80), 30, Color.white, TextAnchor.MiddleRight, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+        hud.expText.text = "<Lv. 00>\n<Exp: 0000 / 0000>";
+
+        // 우측 중앙 (인벤토리 토글 패널)
+        GameObject invObj = new GameObject("InventoryPanel");
+        invObj.transform.SetParent(canvasObj.transform, false);
+        RectTransform invRt = invObj.AddComponent<RectTransform>();
+        invRt.anchorMin = new Vector2(1f, 0.5f);
+        invRt.anchorMax = new Vector2(1f, 0.5f);
+        invRt.pivot = new Vector2(1f, 0.5f);
+        invRt.anchoredPosition = new Vector2(0, 0);
+        invRt.sizeDelta = new Vector2(300, 500);
+        
+        hud.inventoryPanel = invObj;
+        hud.inventoryTexts = new Text[9];
+        for(int i = 0; i < 9; i++)
+        {
+            hud.inventoryTexts[i] = CreateText($"InvSlot_{i+1}", new Vector2(-50, 200 - (i * 50)), new Vector2(250, 50), 30, Color.white, TextAnchor.MiddleRight, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+            if (i == 0) hud.inventoryTexts[i].text = "1. 레벨 100 달성";
+            else if (i == 1) hud.inventoryTexts[i].text = "2. 1차 각성 돌파";
+            else if (i == 2) hud.inventoryTexts[i].text = "3. 2차 각성 돌파";
+            else if (i == 3) hud.inventoryTexts[i].text = "4. 전체 초기화";
+            else hud.inventoryTexts[i].text = $"{i+1}. [빈 인벤토리]";
+            hud.inventoryTexts[i].transform.SetParent(invObj.transform, false);
+        }
+        invObj.SetActive(false); // 초기에 숨겨둠
+
         // 폰트 조절 매니저 (UISettingsManager) 호환성 연동
-        var settingsMgr = Object.FindObjectOfType<UISettingsManager>();
+        var settingsMgr = Object.FindFirstObjectByType<UISettingsManager>();
         if (settingsMgr != null)
         {
             settingsMgr.allUITexts.Add(hud.timerText);
@@ -91,7 +123,10 @@ public static class UIBuilder
             settingsMgr.allUITexts.Add(hud.hpText);
             settingsMgr.allUITexts.Add(hud.ammoText);
             settingsMgr.allUITexts.Add(hud.classNameText);
+            settingsMgr.allUITexts.Add(hud.expText);
+            settingsMgr.allUITexts.Add(hud.totalDamageText);
             foreach (var st in hud.skillTexts) settingsMgr.allUITexts.Add(st);
+            foreach (var st in hud.inventoryTexts) settingsMgr.allUITexts.Add(st);
         }
 
         // ================= 전직 메뉴 (C키 호출) =================
@@ -149,6 +184,7 @@ public static class UIBuilder
         CreateClassButton("검사 (Swordsman)", 2, new Vector2(150, 20));
         CreateClassButton("거너 (Gunner)", 3, new Vector2(-150, -80));
         CreateClassButton("마법사 (Mage)", 4, new Vector2(150, -80));
+        CreateClassButton("성기사 (Paladin)", 5, new Vector2(0, -180));
 
         classPanelObj.SetActive(false); // 기본 숨김 처리
 

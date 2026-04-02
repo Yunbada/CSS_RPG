@@ -27,7 +27,7 @@ Transform:
   m_GameObject: {fileID: 2220020217098288505}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.6, z: 0}
+  m_LocalPosition: {x: 0, y: 1.6, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -181,7 +181,14 @@ MonoBehaviour:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
     m_InternalValue: 0
-  hitEffectPrefab: {fileID: 2971465956471341466, guid: 30382b5445766ab4ca52845e90659c94, type: 3}
+  vfxStraight: {fileID: 5795791298240821459, guid: 51f5f29cfafa91447a416b6dcb23062b, type: 3}
+  vfxRising: {fileID: 3580635802122145915, guid: d192e6a0d83e3244db482c7e4a062224, type: 3}
+  vfxTyphoon: {fileID: 5125367987277168362, guid: 2af25ab9499156441bf20ae113cb8cbc, type: 3}
+  vfxRupture: {fileID: 3513907352283424605, guid: c33a9f2d258dfa4439279076c302f20d, type: 3}
+  vfxLightning: {fileID: 4862650958636209952, guid: 64434c38f83f6e6479974b4e44765db5, type: 3}
+  vfxOrb: {fileID: 8054214772194280110, guid: fc9d7267a90a1b34d9fc7f91d69f2f59, type: 3}
+  vfxSmear: {fileID: 1494684616647186940, guid: e3dce7c88f9ccd44cb1b93f4673f0a9e, type: 3}
+  vfxAbstractFlash: {fileID: 178730060903257956, guid: a24513af336fc6643bb33924a0d4312b, type: 3}
 --- !u!114 &6737690673452673902
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -264,6 +271,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerClass
   ShowTopMostFoldoutHeaderGroup: 1
   currentClass:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
+  awakeningLevel:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
@@ -398,7 +410,7 @@ CharacterController:
   m_StepOffset: 0.3
   m_SkinWidth: 0.08
   m_MinMoveDistance: 0.001
-  m_Center: {x: 0, y: 0, z: 0}
+  m_Center: {x: 0, y: 1, z: 0}
 --- !u!114 &2017419552823803518
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -458,8 +470,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
   ShowTopMostFoldoutHeaderGroup: 1
-  walkSpeed: 5
-  runSpeed: 8
+  walkSpeed: 3
+  runSpeed: 5
   jumpForce: 1
   gravity: -9.81
 --- !u!114 &4312485160097075336
@@ -574,7 +586,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 2faa610713d3b3c439473daa55e8c60a, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 2faa610713d3b3c439473daa55e8c60a, type: 3}
       propertyPath: m_LocalPosition.z

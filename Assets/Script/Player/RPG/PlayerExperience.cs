@@ -21,6 +21,14 @@ public class PlayerExperience : NetworkBehaviour
         CurrentExp.Value = exp;
     }
 
+    [ServerRpc(RequireOwnership = false)]
+    public void SetCheatLevelServerRpc(int level)
+    {
+        Level.Value = level;
+        CurrentExp.Value = 0;
+        SaveDataClientRpc(Level.Value, CurrentExp.Value);
+    }
+
     // 서버 전용 함수
     public void AddExp(int amount)
     {
