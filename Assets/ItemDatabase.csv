@@ -1,0 +1,19 @@
+ItemID,Name,Type,Slot,Rarity,StatType,StatValue,IsMultiplicative,Description,DropWeight
+1001,녹슨 검,Equipment,Weapon,Common,Attack,10,false,좀비의 뼈로 만든 낡은 검,30
+1002,가시 투구,Equipment,Helmet,Common,Defense,8,false,가시가 박힌 기괴한 투구,25
+1003,썩은 가죽 갑옷,Equipment,Armor,Uncommon,Defense,15,false,좀비 가죽을 엮어 만든 갑옷,20
+1004,뼈 장갑,Equipment,Gloves,Common,CritRate,3,false,단단한 뼈 조각으로 보강된 장갑,25
+1005,어둠의 부츠,Equipment,Boots,Uncommon,Speed,12,false,그림자처럼 가볍게 움직이는 부츠,18
+1006,분노의 도끼,Equipment,Weapon,Rare,Attack,25,false,광전사의 혼이 깃든 전투도끼,10
+1007,빛의 방패,Equipment,Gloves,Rare,Defense,20,false,신성한 빛으로 보호하는 방패,10
+1008,전설의 왕관,Equipment,Helmet,Epic,CritDamage,30,false,고대 왕의 영혼이 서린 왕관,5
+1009,용의 심장 갑옷,Equipment,Armor,Epic,MaxHealth,25,false,용의 비늘로 만든 불멸의 갑옷,5
+1010,신의 검,Equipment,Weapon,Legendary,Attack,50,true,천상의 빛을 담은 궁극의 검,1
+2001,썩은 가죽,CraftMaterial,None,Common,Attack,0,false,좀비에게서 벗겨낸 가죽 조각,40
+2002,썩은 이빨,CraftMaterial,None,Common,Attack,0,false,날카로운 좀비의 이빨,40
+2003,깨진 두개골,CraftMaterial,None,Common,Attack,0,false,으스스한 좀비의 두개골 파편,35
+2004,마력 결정,CraftMaterial,None,Uncommon,Attack,0,false,응축된 마나가 결정화된 보석,15
+2005,강화석,CraftMaterial,None,Rare,Attack,0,false,장비를 강화할 수 있는 특수 광석,8
+3001,용의 비늘,RareMaterial,None,Epic,Attack,0,false,전설적인 용의 비늘 한 조각,3
+3002,빛의 파편,RareMaterial,None,Rare,Attack,0,false,신성한 에너지가 응축된 파편,5
+3003,어둠의 정수,RareMaterial,None,Epic,Attack,0,false,깊은 어둠에서 추출한 정수,3

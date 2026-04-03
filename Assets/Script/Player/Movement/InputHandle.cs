@@ -55,6 +55,10 @@ public class InputHandle : MonoBehaviour
                 numberPressed = i;
             }     
         }
+        // 0번 키 (디버그 메뉴용)
+        if(Input.GetKeyDown(KeyCode.Alpha0)){
+            numberPressed = -2; // 특수값: 0번 키
+        }
         return numberPressed;
     }
 }

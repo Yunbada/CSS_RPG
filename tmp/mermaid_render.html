@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Class Diagram Renderer</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; padding: 20px; }
+        .diagram-container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); margin-bottom: 40px; }
+        h2 { color: #333; border-left: 5px solid #007bff; padding-left: 15px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>CSS_RPG Project Structure</h1>
+
+    <h2>1. 핵심 플레이어 아키텍처</h2>
+    <div class="diagram-container">
+        <pre class="mermaid">
+        classDiagram
+            class NetworkBehaviour { <<Unity>> }
+            class MonoBehaviour { <<Unity>> }
+            class IDamageable { <<Interface>> }
+
+            class PlayerState {
+                +NetworkVariable currentTeam
+                +NetworkVariable currentHealth
+                +TakeDamage(amount, killerId)
+                +HealServerRpc(amount)
+            }
+
+            class PlayerMovement {
+                +float walkSpeed
+                +float runSpeed
+                +ApplyForcedMovement(velocity, duration)
+                +ApplySlowClientRpc(ratio, duration)
+            }
+
+            class PlayerClass {
+                +NetworkVariable currentClass
+                +NetworkVariable awakeningLevel
+                +ChangeClass(newClass)
+                +SetAwakening(level)
+            }
+
+            class StatSystem {
+                +Dictionary stats
+                +GetStat(type)
+                +AddModifier(type, mod)
+            }
+
+            class SkillSystem {
+                +SkillData[] currentSkills
+                +TryUseSkill(index)
+                +LoadSkillsForClass(classType)
+            }
+
+            class CombatSystem {
+                +CombatState CurrentState
+                +ExecuteSkillAttack(index)
+                +CalculateDamage(multiplier, target)
+            }
+
+            NetworkBehaviour <|-- PlayerState
+            NetworkBehaviour <|-- PlayerMovement
+            NetworkBehaviour <|-- PlayerClass
+            MonoBehaviour <|-- StatSystem
+            MonoBehaviour <|-- SkillSystem
+            MonoBehaviour <|-- CombatSystem
+            IDamageable <|.. PlayerState
+
+            CombatSystem --> PlayerState : Reference
+            CombatSystem --> PlayerClass : Reference
+            CombatSystem --> StatSystem : Reference
+            CombatSystem --> SkillSystem : Reference
+            SkillSystem --> PlayerClass : Reference
+            PlayerMovement --> CombatSystem : Check UsingSkill
+        </pre>
+    </div>
+
+    <h2>2. 전투 시스템 및 스킬 전략</h2>
+    <div class="diagram-container">
+        <pre class="mermaid">
+        classDiagram
+            class ISkillExecutor {
+                <<Interface>>
+                +Initialize(combat, state)
+                +ExecuteSkill(index, skill)
+            }
+
+            class CombatSystem {
+                -ISkillExecutor currentSkillExecutor
+                +UpdateSkillExecutor()
+            }
+
+            class FighterSkillExecutor {
+                +ExecuteSkill(index, skill)
+            }
+
+            class PaladinSkillExecutor {
+                +int ShieldEnergy
+                +AddShieldEnergy(amount)
+                +ExecuteSkill(index, skill)
+            }
+
+            class MageSkillExecutor { }
+            class SwordsmanSkillExecutor { }
+
+            ISkillExecutor <|.. FighterSkillExecutor
+            ISkillExecutor <|.. PaladinSkillExecutor
+            ISkillExecutor <|.. MageSkillExecutor
+            ISkillExecutor <|.. SwordsmanSkillExecutor
+            
+            CombatSystem --> ISkillExecutor : Delegates Skills
+            MonoBehaviour <|-- FighterSkillExecutor
+            MonoBehaviour <|-- PaladinSkillExecutor
+        </pre>
+    </div>
+
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</body>
+</html>

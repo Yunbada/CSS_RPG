@@ -101,16 +101,27 @@ public static class UIBuilder
         
         hud.inventoryPanel = invObj;
         hud.inventoryTexts = new Text[9];
+        string[] menuLabels = {
+            "1. 장비 슬롯",      // index 0 → 숫자키 1
+            "2. 인벤토리",        // index 1 → 숫자키 2
+            "3. 제작소",          // index 2 → 숫자키 3
+            "4. [미구현]",        // index 3 → 숫자키 4
+            "5. [미구현]",        // index 4 → 숫자키 5
+            "6. [미구현]",        // index 5 → 숫자키 6
+            "7. [미구현]",        // index 6 → 숫자키 7
+            "8. ◀ 이전 페이지",   // index 7 → 숫자키 8
+            "9. 다음 페이지 ▶"    // index 8 → 숫자키 9
+        };
         for(int i = 0; i < 9; i++)
         {
             hud.inventoryTexts[i] = CreateText($"InvSlot_{i+1}", new Vector2(-50, 200 - (i * 50)), new Vector2(250, 50), 30, Color.white, TextAnchor.MiddleRight, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-            if (i == 0) hud.inventoryTexts[i].text = "1. 레벨 100 달성";
-            else if (i == 1) hud.inventoryTexts[i].text = "2. 1차 각성 돌파";
-            else if (i == 2) hud.inventoryTexts[i].text = "3. 2차 각성 돌파";
-            else if (i == 3) hud.inventoryTexts[i].text = "4. 전체 초기화";
-            else hud.inventoryTexts[i].text = $"{i+1}. [빈 인벤토리]";
+            hud.inventoryTexts[i].text = menuLabels[i];
             hud.inventoryTexts[i].transform.SetParent(invObj.transform, false);
         }
+        // 0번 디버그 안내는 맨 아래 작게 표시
+        Text debugHint = CreateText("InvSlot_Debug", new Vector2(-50, 200 - (9 * 50)), new Vector2(250, 40), 20, new Color(0.6f, 0.6f, 0.6f), TextAnchor.MiddleRight, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+        debugHint.text = "0. 디버그 메뉴";
+        debugHint.transform.SetParent(invObj.transform, false);
         invObj.SetActive(false); // 초기에 숨겨둠
 
         // 폰트 조절 매니저 (UISettingsManager) 호환성 연동

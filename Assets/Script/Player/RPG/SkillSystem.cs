@@ -28,6 +28,7 @@ public class SkillSystem : MonoBehaviour
     
     private InputHandle inputHandle;
     private PlayerClass playerClass;
+    private bool isDebugSubMenuOpen = false; // 0번 키로 토글되는 디버그 서브메뉴
     private PlayerState playerState;
 
     private bool isInitialized = false;
@@ -130,30 +131,56 @@ public class SkillSystem : MonoBehaviour
         if (inputHandle != null && !isUIOpen)
         {
             int pressedKey = inputHandle.numInput;
-            if (pressedKey >= 0 && pressedKey < 9)
+
+            if (isInvOpen)
             {
-                if (isInvOpen)
+                // === N키 메뉴 열림 상태: 인벤토리 조작 ===
+                if (pressedKey == 0) // 숫자 1번 → 장비 슬롯
                 {
-                    // 인벤토리용 더미 디버그 조작
-                    if (pressedKey == 0) // 숫자 1번
+                    Debug.Log("[인벤토리] 장비 슬롯 화면 (Phase 2에서 구현 예정)");
+                }
+                else if (pressedKey == 1) // 숫자 2번 → 인벤토리 (보유 현황)
+                {
+                    Debug.Log("[인벤토리] 아이템 보유 현황 (Phase 2에서 구현 예정)");
+                }
+                else if (pressedKey == 2) // 숫자 3번 → 제작소
+                {
+                    Debug.Log("[인벤토리] 제작소 화면 (Phase 2에서 구현 예정)");
+                }
+                else if (pressedKey == 7) // 숫자 8번 → 이전 페이지
+                {
+                    Debug.Log("[인벤토리] ◀ 이전 페이지 (Phase 2에서 구현 예정)");
+                }
+                else if (pressedKey == 8) // 숫자 9번 → 다음 페이지
+                {
+                    Debug.Log("[인벤토리] 다음 페이지 ▶ (Phase 2에서 구현 예정)");
+                }
+                else if (pressedKey == -2) // 숫자 0번 → 디버그 메뉴 토글
+                {
+                    isDebugSubMenuOpen = !isDebugSubMenuOpen;
+                    Debug.Log(isDebugSubMenuOpen ? "[디버그] 디버그 메뉴 열림 (1=Lv100, 2=1차각성, 3=2차각성, 4=초기화)" : "[디버그] 디버그 메뉴 닫힘");
+                }
+                // 디버그 서브메뉴가 열려있을 때만 작동하는 디버그 단축키
+                else if (isDebugSubMenuOpen)
+                {
+                    if (pressedKey == 3) // 숫자 4번 → 레벨 100
                     {
                         var exp = GetComponent<PlayerExperience>();
                         if (exp != null) exp.SetCheatLevelServerRpc(100);
-                        Debug.Log("디버그: 인벤토리 열림 상태에서 1번 단축키로 레벨 100 설정!");
+                        Debug.Log("디버그: 레벨 100 설정!");
                     }
-                    else if (pressedKey == 1) // 숫자 2번
+                    else if (pressedKey == 4) // 숫자 5번 → 1차 각성
                     {
                         playerClass.SetAwakeningServerRpc(1);
-                        Debug.Log("디버그: 인벤토리 열림 상태에서 2번 단축키로 1차 각성 설정!");
+                        Debug.Log("디버그: 1차 각성 설정!");
                     }
-                    else if (pressedKey == 2) // 숫자 3번
+                    else if (pressedKey == 5) // 숫자 6번 → 2차 각성
                     {
                         playerClass.SetAwakeningServerRpc(2);
-                        Debug.Log("디버그: 인벤토리 열림 상태에서 3번 단축키로 2차 각성 설정!");
+                        Debug.Log("디버그: 2차 각성 설정!");
                     }
-                    else if (pressedKey == 3) // 숫자 4번
+                    else if (pressedKey == 6) // 숫자 7번 → 전체 초기화
                     {
-                        // 전직, 레벨, 경험치, 각성 모두 초기화
                         playerClass.ChangeClassServerRpc(PlayerClassType.None);
                         playerClass.SetAwakeningServerRpc(0);
                         var exp = GetComponent<PlayerExperience>();
@@ -161,10 +188,10 @@ public class SkillSystem : MonoBehaviour
                         Debug.Log("디버그: 전직/레벨/경험치/각성 모두 초기화!");
                     }
                 }
-                else
-                {
-                    TryUseSkill(pressedKey);
-                }
+            }
+            else if (pressedKey >= 0 && pressedKey < 9)
+            {
+                TryUseSkill(pressedKey);
             }
         }
     }

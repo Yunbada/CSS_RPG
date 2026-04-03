@@ -22,6 +22,12 @@ public class NetworkManagerUI : MonoBehaviour
             gameObject.AddComponent<CsvDatabase>();
         }
 
+        // ItemDatabase가 없다면 자동 추가 (아이템 정적 데이터 매니저)
+        if (FindFirstObjectByType<ItemDatabase>() == null)
+        {
+            gameObject.AddComponent<ItemDatabase>();
+        }
+
         if (authPanel != null) authPanel.SetActive(true);
         if (connectPanel != null) connectPanel.SetActive(false);
     }
