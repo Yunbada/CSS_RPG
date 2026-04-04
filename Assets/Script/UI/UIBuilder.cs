@@ -97,30 +97,19 @@ public static class UIBuilder
         invRt.anchorMax = new Vector2(1f, 0.5f);
         invRt.pivot = new Vector2(1f, 0.5f);
         invRt.anchoredPosition = new Vector2(0, 0);
-        invRt.sizeDelta = new Vector2(300, 500);
+        invRt.sizeDelta = new Vector2(300, 600);
         
         hud.inventoryPanel = invObj;
         hud.inventoryTexts = new Text[9];
-        string[] menuLabels = {
-            "1. 장비 슬롯",      // index 0 → 숫자키 1
-            "2. 인벤토리",        // index 1 → 숫자키 2
-            "3. 제작소",          // index 2 → 숫자키 3
-            "4. [미구현]",        // index 3 → 숫자키 4
-            "5. [미구현]",        // index 4 → 숫자키 5
-            "6. [미구현]",        // index 5 → 숫자키 6
-            "7. [미구현]",        // index 6 → 숫자키 7
-            "8. ◀ 이전 페이지",   // index 7 → 숫자키 8
-            "9. 다음 페이지 ▶"    // index 8 → 숫자키 9
-        };
         for(int i = 0; i < 9; i++)
         {
-            hud.inventoryTexts[i] = CreateText($"InvSlot_{i+1}", new Vector2(-50, 200 - (i * 50)), new Vector2(250, 50), 30, Color.white, TextAnchor.MiddleRight, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-            hud.inventoryTexts[i].text = menuLabels[i];
+            hud.inventoryTexts[i] = CreateText($"InvSlot_{i+1}", new Vector2(-50, 240 - (i * 55)), new Vector2(280, 50), 24, Color.white, TextAnchor.MiddleRight, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+            hud.inventoryTexts[i].text = ""; // InventoryUIController가 런타임에 설정
             hud.inventoryTexts[i].transform.SetParent(invObj.transform, false);
         }
-        // 0번 디버그 안내는 맨 아래 작게 표시
-        Text debugHint = CreateText("InvSlot_Debug", new Vector2(-50, 200 - (9 * 50)), new Vector2(250, 40), 20, new Color(0.6f, 0.6f, 0.6f), TextAnchor.MiddleRight, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-        debugHint.text = "0. 디버그 메뉴";
+        // 0번 안내는 하단에 고정
+        Text debugHint = CreateText("InvSlot_Hint", new Vector2(-50, 240 - (9 * 55)), new Vector2(280, 40), 18, new Color(0.5f, 0.5f, 0.5f), TextAnchor.MiddleRight, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+        debugHint.text = "0. 디버그 / 뒤로가기";
         debugHint.transform.SetParent(invObj.transform, false);
         invObj.SetActive(false); // 초기에 숨겨둠
 

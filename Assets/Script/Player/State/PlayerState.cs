@@ -86,8 +86,6 @@ public class PlayerState : NetworkBehaviour, IDamageable
         currentTeam.OnValueChanged += OnTeamChanged;
         currentZombieType.OnValueChanged += OnZombieTypeChanged;
         
-        // 스폰 시 현재 팀 색상 초기화 (늦게 접속한 클라이언트나 시작 시 좀비인 경우)
-        ApplyTeamColor(currentTeam.Value);
     }
 
     public override void OnNetworkDespawn()
@@ -298,7 +296,7 @@ public class PlayerState : NetworkBehaviour, IDamageable
     private void OnTeamChanged(Team previous, Team current)
     {
         Debug.Log($"Player {OwnerClientId} changed team to {current}");
-        ApplyTeamColor(current);
+       
 
         if (IsServer)
         {
@@ -315,62 +313,6 @@ public class PlayerState : NetworkBehaviour, IDamageable
         }
     }
 
-    private Material zombieOverlayMaterial;
-
-    private void ApplyTeamColor(Team team)
-    {
-        bool isZombie = (team != Team.Human);
-        
-        if (zombieOverlayMaterial == null)
-        {
-            zombieOverlayMaterial = new Material(Shader.Find("Sprites/Default"));
-            zombieOverlayMaterial.color = new Color(1f, 0f, 0f, 0.5f); 
-            zombieOverlayMaterial.name = "ZombieOverlay";
-        }
-
-        // 특정 이름을 가진 자식 SkinnedMeshRenderer 찾기 (이름: bodymesh)
-        SkinnedMeshRenderer targetSmr = null;
-        var smrs = GetComponentsInChildren<SkinnedMeshRenderer>(true);
-        foreach (var smr in smrs)
-        {
-            if (smr.gameObject.name.ToLower().Contains("bodymesh"))
-            {
-                targetSmr = smr;
-                break;
-            }
-        }
-
-        if (targetSmr != null)
-        {
-            ApplyOverlay(targetSmr, isZombie);
-            Debug.Log($"[ApplyTeamColor] {OwnerClientId} ({team}) -> {targetSmr.gameObject.name} 에 SMR 오버레이 적용됨. isZombie={isZombie}");
-            return;
-        }
-
-        // 못 찾았다면 전체 렌더러에 폴백 (Fallback)
-        Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
-        Debug.Log($"[ApplyTeamColor] {OwnerClientId} ({team}) -> 정확한 bodymesh를 찾지 못하여 {renderers.Length}개의 모든 렌더러에 적용 시도.");
-        foreach (var rend in renderers)
-        {
-            ApplyOverlay(rend, isZombie);
-        }
-    }
-
-    private void ApplyOverlay(Renderer rend, bool isZombie)
-    {
-        var mats = new System.Collections.Generic.List<Material>(rend.sharedMaterials);
-        
-        // 기존 좀비 오버레이 제거
-        mats.RemoveAll(m => m != null && m.name.StartsWith("ZombieOverlay"));
-
-        // 좀비라면 오버레이 추가
-        if (isZombie)
-        {
-            mats.Add(zombieOverlayMaterial);
-        }
-        
-        rend.materials = mats.ToArray();
-    }
 
     private void OnZombieTypeChanged(ZombieType previous, ZombieType current)
     {
