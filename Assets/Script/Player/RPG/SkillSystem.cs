@@ -140,7 +140,8 @@ public class SkillSystem : MonoBehaviour
                     var inv = GetComponent<InventorySystem>();
                     var equip = GetComponent<EquipmentSystem>();
                     var pExp = GetComponent<PlayerExperience>();
-                    invUIController = new InventoryUIController(inv, equip, playerClass, pExp);
+                    var trade = GetComponent<PlayerTradeSystem>();
+                    invUIController = new InventoryUIController(inv, equip, playerClass, pExp, trade);
                 }
 
                 // 키 입력 처리

@@ -1,4 +1,4 @@
 ﻿PersonalCode,ID,Password,Level,Exp,ClassIndex,Leather,Tooth,Skull,InventoryData,EquipmentData
-CODE-0001,asd,asd,100,0,5,4,4,2,0:0;2002:10;2003:8;2004:9;2005:21;3001:18;3002:16;3003:20;1002:1;0:0;0:0,Weapon:1001,Helmet:1008,Armor:1003,Gloves:0,Boots:0
+CODE-0001,asd,asd,100,0,5,4,4,2,2001:10;2002:20;2003:18;2004:19;2005:31;3001:28;3002:26;3003:30;0:0;0:0;0:0,Weapon:1001
 CODE-0002,asdf,asdf,100,0,0,1,0,0,,
-CODE-0003,aaa,aaa,100,0,1,0,2,0,,
+CODE-0003,aaa,aaa,100,0,1,0,2,0,2001:1,
