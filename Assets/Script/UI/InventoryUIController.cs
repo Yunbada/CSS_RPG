@@ -35,6 +35,10 @@ public class InventoryUIController
     private PlayerExperience playerExp;
     private PlayerTradeSystem trade;
 
+    private GameObject inventoryCanvasObj;
+    private GameObject inventoryPanel;
+    private Text[] inventoryTexts;
+
     private List<ulong> nearbyPlayersCache = new List<ulong>();
 
     public InventoryUIController(InventorySystem inv, EquipmentSystem equip, PlayerClass pClass, PlayerExperience pExp, PlayerTradeSystem pTrade)
@@ -44,6 +48,84 @@ public class InventoryUIController
         playerClass = pClass;
         playerExp = pExp;
         trade = pTrade;
+
+        EnsureUI();
+    }
+
+    private void EnsureUI()
+    {
+        if (inventoryCanvasObj != null) return;
+
+        inventoryCanvasObj = new GameObject("Inventory_Canvas_Runtime");
+        Canvas canvas = inventoryCanvasObj.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 900; // 서버 콘솔 및 에러로그 밑에 뜨도록
+        
+        var scaler = inventoryCanvasObj.AddComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920, 1080);
+        scaler.matchWidthOrHeight = 0.5f; // 창모드 해상도 대응
+        inventoryCanvasObj.AddComponent<GraphicRaycaster>();
+
+        inventoryPanel = new GameObject("InventoryPanel");
+        inventoryPanel.transform.SetParent(inventoryCanvasObj.transform, false);
+        RectTransform invRt = inventoryPanel.AddComponent<RectTransform>();
+        invRt.anchorMin = new Vector2(1f, 0.5f);
+        invRt.anchorMax = new Vector2(1f, 0.5f);
+        invRt.pivot = new Vector2(1f, 0.5f);
+        invRt.anchoredPosition = new Vector2(-10, 0);
+        invRt.sizeDelta = new Vector2(330, 580);
+
+        Image invBg = inventoryPanel.AddComponent<Image>();
+        invBg.color = new Color(0.1f, 0.1f, 0.1f, 0.85f);
+
+        inventoryTexts = new Text[10];
+        Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+
+        for (int i = 0; i < 10; i++)
+        {
+            GameObject txtObj = new GameObject($"InvText_{i}");
+            txtObj.transform.SetParent(inventoryPanel.transform, false);
+            RectTransform rt = txtObj.AddComponent<RectTransform>();
+            // 패널 내부 좌우를 stretch하고 상단 기준으로 배치
+            rt.anchorMin = new Vector2(0, 1);
+            rt.anchorMax = new Vector2(1, 1);
+            rt.pivot = new Vector2(0.5f, 1);
+            rt.sizeDelta = new Vector2(-20, 48); // 좌우 10px 여백 확보, 높이 48
+            rt.anchoredPosition = new Vector2(0, -10 - (i * 55)); // 10px 상단 여백, 55px 간격
+
+            Text txt = txtObj.AddComponent<Text>();
+            txt.font = font;
+            txt.fontSize = 22;
+            txt.color = Color.white;
+            txt.alignment = TextAnchor.MiddleLeft;
+            txt.horizontalOverflow = HorizontalWrapMode.Overflow;
+
+            // 그림자
+            Shadow shadow = txtObj.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0, 0, 0, 0.8f);
+            shadow.effectDistance = new Vector2(2, -2);
+
+            inventoryTexts[i] = txt;
+        }
+
+        inventoryCanvasObj.SetActive(false); // 기본은 꺼짐 상태
+    }
+
+    public void TogglePanel(bool isVisible)
+    {
+        if (inventoryCanvasObj != null)
+        {
+            inventoryCanvasObj.SetActive(isVisible);
+        }
+    }
+
+    public void DestroyUI()
+    {
+        if (inventoryCanvasObj != null)
+        {
+            Object.Destroy(inventoryCanvasObj);
+        }
     }
 
     /// <summary>패널이 열릴 때 메인 메뉴로 초기화</summary>
@@ -54,67 +136,67 @@ public class InventoryUIController
     }
 
     /// <summary>키 입력 처리. pressedKey: 0~8 (Alpha1~9), -2 (Alpha0)</summary>
-    public void HandleInput(int pressedKey, UIGameHUD hud)
+    public void HandleInput(int pressedKey)
     {
         switch (CurrentState)
         {
             case InventoryViewState.Main:
-                HandleMainInput(pressedKey, hud);
+                HandleMainInput(pressedKey);
                 break;
             case InventoryViewState.Equipment:
-                HandleEquipmentInput(pressedKey, hud);
+                HandleEquipmentInput(pressedKey);
                 break;
             case InventoryViewState.Inventory:
-                HandleInventoryInput(pressedKey, hud);
+                HandleInventoryInput(pressedKey);
                 break;
             case InventoryViewState.Crafting:
-                HandleCraftingInput(pressedKey, hud);
+                HandleCraftingInput(pressedKey);
                 break;
             case InventoryViewState.Debug:
-                HandleDebugInput(pressedKey, hud);
+                HandleDebugInput(pressedKey);
                 break;
             case InventoryViewState.TradeSearch:
-                HandleTradeSearchInput(pressedKey, hud);
+                HandleTradeSearchInput(pressedKey);
                 break;
             case InventoryViewState.TradeSession:
-                HandleTradeSessionInput(pressedKey, hud);
+                HandleTradeSessionInput(pressedKey);
                 break;
             case InventoryViewState.TradeInventorySelect:
-                HandleTradeInventorySelectInput(pressedKey, hud);
+                HandleTradeInventorySelectInput(pressedKey);
                 break;
         }
     }
 
     /// <summary>현재 상태에 맞게 UI 텍스트 갱신</summary>
-    public void RefreshDisplay(UIGameHUD hud)
+    public void RefreshDisplay()
     {
-        if (hud == null || hud.inventoryTexts == null) return;
+        if (inventoryTexts == null) return;
 
         switch (CurrentState)
         {
             case InventoryViewState.Main:
-                DisplayMain(hud);
+                DisplayMain();
                 break;
             case InventoryViewState.Equipment:
-                DisplayEquipment(hud);
+                DisplayEquipment();
                 break;
             case InventoryViewState.Inventory:
-                DisplayInventory(hud);
+                DisplayInventory();
                 break;
             case InventoryViewState.Crafting:
-                DisplayCrafting(hud);
+                DisplayCrafting();
                 break;
             case InventoryViewState.Debug:
-                DisplayDebug(hud);
+                DisplayDebug();
                 break;
             case InventoryViewState.TradeSearch:
-                DisplayTradeSearch(hud);
+                DisplayTradeSearch();
                 break;
             case InventoryViewState.TradeSession:
-                DisplayTradeSession(hud);
+                DisplayTradeSession();
                 break;
             case InventoryViewState.TradeInventorySelect:
-                DisplayTradeInventorySelect(hud);
+                DisplayTradeInventorySelect();
                 break;
         }
     }
@@ -122,38 +204,38 @@ public class InventoryUIController
     // =========================================================================
     // 메인 메뉴
     // =========================================================================
-    private void HandleMainInput(int key, UIGameHUD hud)
+    private void HandleMainInput(int key)
     {
-        if (key == 0) { CurrentState = InventoryViewState.Equipment; RefreshDisplay(hud); }
-        else if (key == 1) { CurrentState = InventoryViewState.Inventory; RefreshDisplay(hud); }
-        else if (key == 2) { CurrentState = InventoryViewState.Crafting; craftingPage = 0; RefreshDisplay(hud); }
-        else if (key == 3) { CurrentState = InventoryViewState.TradeSearch; RefreshDisplay(hud); }
-        else if (key == -2) { CurrentState = InventoryViewState.Debug; RefreshDisplay(hud); }
+        if (key == 0) { CurrentState = InventoryViewState.Equipment; RefreshDisplay(); }
+        else if (key == 1) { CurrentState = InventoryViewState.Inventory; RefreshDisplay(); }
+        else if (key == 2) { CurrentState = InventoryViewState.Crafting; craftingPage = 0; RefreshDisplay(); }
+        else if (key == 3) { CurrentState = InventoryViewState.TradeSearch; RefreshDisplay(); }
+        else if (key == -2) { CurrentState = InventoryViewState.Debug; RefreshDisplay(); }
     }
 
-    private void DisplayMain(UIGameHUD hud)
+    private void DisplayMain()
     {
-        ClearTexts(hud);
-        SetText(hud, 0, "1. 장비 슬롯", Color.white);
-        SetText(hud, 1, "2. 인벤토리", Color.white);
-        SetText(hud, 2, "3. 제작소", Color.white);
-        SetText(hud, 3, "4. 플레이어 거래", Color.white);
-        SetText(hud, 4, "5. [미구현]", new Color(0.5f, 0.5f, 0.5f));
-        SetText(hud, 5, "6. [미구현]", new Color(0.5f, 0.5f, 0.5f));
-        SetText(hud, 6, "7. [미구현]", new Color(0.5f, 0.5f, 0.5f));
-        SetText(hud, 7, "", Color.white);
-        SetText(hud, 8, "", Color.white);
+        ClearTexts();
+        SetText(0, "1. 장비 슬롯", Color.white);
+        SetText(1, "2. 인벤토리", Color.white);
+        SetText(2, "3. 제작소", Color.white);
+        SetText(3, "4. 플레이어 거래", Color.white);
+        SetText(4, "5. [미구현]", new Color(0.5f, 0.5f, 0.5f));
+        SetText(5, "6. [미구현]", new Color(0.5f, 0.5f, 0.5f));
+        SetText(6, "7. [미구현]", new Color(0.5f, 0.5f, 0.5f));
+        SetText(7, "", Color.white);
+        SetText(8, "", Color.white);
     }
 
     // =========================================================================
     // 장비 슬롯
     // =========================================================================
-    private void HandleEquipmentInput(int key, UIGameHUD hud)
+    private void HandleEquipmentInput(int key)
     {
         if (key == -2) // 0번 → 뒤로
         {
             CurrentState = InventoryViewState.Main;
-            RefreshDisplay(hud);
+            RefreshDisplay();
             return;
         }
 
@@ -167,14 +249,14 @@ public class InventoryUIController
                 Debug.Log($"[인벤토리UI] {EquipmentSystem.SlotOrder[key]} 슬롯 장비 해제");
             }
             // 짧은 딜레이 후 갱신 (1프레임 뒤)
-            RefreshDisplay(hud);
+            RefreshDisplay();
         }
     }
 
-    private void DisplayEquipment(UIGameHUD hud)
+    private void DisplayEquipment()
     {
-        ClearTexts(hud);
-        SetText(hud, 0, "── [ 장비 슬롯 ] ──", new Color(1f, 0.85f, 0.3f));
+        ClearTexts();
+        SetText(0, "── [ 장비 슬롯 ] ──", new Color(1f, 0.85f, 0.3f));
 
         string[] slotNames = { "무기", "투구", "갑옷", "장갑", "신발" };
         for (int i = 0; i < 5; i++)
@@ -191,37 +273,37 @@ public class InventoryUIController
                     color = GetRarityColor(data.Rarity);
                 }
             }
-            SetText(hud, i + 1, $"{i + 1}. {slotNames[i]}: {itemName}", color);
+            SetText(i + 1, $"{i + 1}. {slotNames[i]}: {itemName}", color);
         }
 
-        SetText(hud, 6, "", Color.white);
-        SetText(hud, 7, "※ 번호를 눌러 해제", new Color(0.7f, 0.7f, 0.7f));
-        SetText(hud, 8, "0. 뒤로가기", Color.white);
+        SetText(6, "", Color.white);
+        SetText(7, "※ 번호를 눌러 해제", new Color(0.7f, 0.7f, 0.7f));
+        SetText(8, "0. 뒤로가기", Color.white);
     }
 
     // =========================================================================
     // 인벤토리
     // =========================================================================
-    private void HandleInventoryInput(int key, UIGameHUD hud)
+    private void HandleInventoryInput(int key)
     {
         if (key == -2) // 0번 → 뒤로
         {
             CurrentState = InventoryViewState.Main;
-            RefreshDisplay(hud);
+            RefreshDisplay();
             return;
         }
 
         if (key == 7 && inventory != null) // 8번 → 이전 페이지
         {
             inventory.PrevPage();
-            RefreshDisplay(hud);
+            RefreshDisplay();
             return;
         }
 
         if (key == 8 && inventory != null) // 9번 → 다음 페이지
         {
             inventory.NextPage();
-            RefreshDisplay(hud);
+            RefreshDisplay();
             return;
         }
 
@@ -243,16 +325,16 @@ public class InventoryUIController
                     Debug.Log($"[인벤토리UI] {itemData.Name}은(는) 장착할 수 없는 아이템입니다.");
                 }
             }
-            RefreshDisplay(hud);
+            RefreshDisplay();
         }
     }
 
-    private void DisplayInventory(UIGameHUD hud)
+    private void DisplayInventory()
     {
-        ClearTexts(hud);
+        ClearTexts();
         int page = inventory != null ? inventory.CurrentPage + 1 : 1;
         int totalPages = inventory != null ? inventory.TotalPages : 1;
-        SetText(hud, 0, $"── [ 인벤토리 ] ({page}/{totalPages}) ──", new Color(0.3f, 0.85f, 1f));
+        SetText(0, $"── [ 인벤토리 ] ({page}/{totalPages}) ──", new Color(0.3f, 0.85f, 1f));
 
         List<InventorySlot> pageSlots = inventory != null
             ? inventory.GetCurrentPageSlots()
@@ -268,38 +350,38 @@ public class InventoryUIController
                     string countStr = itemData.IsStackable ? $" x{pageSlots[i].Count}" : "";
                     string equipTag = itemData.Type == ItemType.Equipment ? " [장비]" : "";
                     Color color = GetRarityColor(itemData.Rarity);
-                    SetText(hud, i + 1, $"{i + 1}. {itemData.Name}{countStr}{equipTag}", color);
+                    SetText(i + 1, $"{i + 1}. {itemData.Name}{countStr}{equipTag}", color);
                 }
                 else
                 {
-                    SetText(hud, i + 1, $"{i + 1}. ??? (ID:{pageSlots[i].ItemID})", Color.gray);
+                    SetText(i + 1, $"{i + 1}. ??? (ID:{pageSlots[i].ItemID})", Color.gray);
                 }
             }
             else
             {
-                SetText(hud, i + 1, $"{i + 1}. [빈 슬롯]", new Color(0.4f, 0.4f, 0.4f));
+                SetText(i + 1, $"{i + 1}. [빈 슬롯]", new Color(0.4f, 0.4f, 0.4f));
             }
         }
 
-        SetText(hud, 8, "8.◀이전  9.▶다음  0.뒤로", new Color(0.7f, 0.7f, 0.7f));
+        SetText(8, "8.◀이전  9.▶다음  0.뒤로", new Color(0.7f, 0.7f, 0.7f));
     }
 
     // =========================================================================
     // 제작소
     // =========================================================================
-    private void HandleCraftingInput(int key, UIGameHUD hud)
+    private void HandleCraftingInput(int key)
     {
         if (key == -2) // 0번 → 뒤로
         {
             CurrentState = InventoryViewState.Main;
-            RefreshDisplay(hud);
+            RefreshDisplay();
             return;
         }
 
         if (key == 7) // 8번 → 이전 페이지
         {
             if (craftingPage > 0) craftingPage--;
-            RefreshDisplay(hud);
+            RefreshDisplay();
             return;
         }
 
@@ -310,7 +392,7 @@ public class InventoryUIController
                 int maxPage = Mathf.Max(0, Mathf.CeilToInt((float)ItemDatabase.Instance.GetAllRecipes().Count / RECIPES_PER_PAGE) - 1);
                 if (craftingPage < maxPage) craftingPage++;
             }
-            RefreshDisplay(hud);
+            RefreshDisplay();
             return;
         }
 
@@ -324,20 +406,20 @@ public class InventoryUIController
                 inventory.CraftByRecipeServerRpc(recipes[recipeIndex].RecipeID);
                 Debug.Log($"[제작소] {recipes[recipeIndex].ResultItemName} 제작 요청");
             }
-            RefreshDisplay(hud);
+            RefreshDisplay();
         }
     }
 
-    private void DisplayCrafting(UIGameHUD hud)
+    private void DisplayCrafting()
     {
-        ClearTexts(hud);
+        ClearTexts();
 
         var recipes = ItemDatabase.Instance != null
             ? ItemDatabase.Instance.GetAllRecipes()
             : new List<RecipeData>();
 
         int totalCraftPages = Mathf.Max(1, Mathf.CeilToInt((float)recipes.Count / RECIPES_PER_PAGE));
-        SetText(hud, 0, $"── [ 제작소 ] ({craftingPage + 1}/{totalCraftPages}) ──", new Color(0.3f, 1f, 0.5f));
+        SetText(0, $"── [ 제작소 ] ({craftingPage + 1}/{totalCraftPages}) ──", new Color(0.3f, 1f, 0.5f));
 
         int startIdx = craftingPage * RECIPES_PER_PAGE;
         for (int i = 0; i < RECIPES_PER_PAGE; i++)
@@ -351,26 +433,26 @@ public class InventoryUIController
 
                 string statusTag = canCraft ? " [제작가능]" : " [재료부족]";
                 Color nameColor = canCraft ? new Color(0.3f, 1f, 0.5f) : Color.gray;
-                SetText(hud, i + 1, $"{i + 1}. {recipe.ResultItemName}{statusTag}", nameColor);
+                SetText(i + 1, $"{i + 1}. {recipe.ResultItemName}{statusTag}", nameColor);
             }
             else
             {
-                SetText(hud, i + 1, "", Color.white);
+                SetText(i + 1, "", Color.white);
             }
         }
 
-        SetText(hud, 8, "8.◀이전  9.▶다음  0.뒤로", new Color(0.7f, 0.7f, 0.7f));
+        SetText(8, "8.◀이전  9.▶다음  0.뒤로", new Color(0.7f, 0.7f, 0.7f));
     }
 
     // =========================================================================
     // 디버그
     // =========================================================================
-    private void HandleDebugInput(int key, UIGameHUD hud)
+    private void HandleDebugInput(int key)
     {
         if (key == -2) // 0번 → 뒤로
         {
             CurrentState = InventoryViewState.Main;
-            RefreshDisplay(hud);
+            RefreshDisplay();
             return;
         }
 
@@ -407,32 +489,32 @@ public class InventoryUIController
                 Debug.Log("디버그: 모든 재료 10개씩 추가 요청!");
             }
         }
-        RefreshDisplay(hud);
+        RefreshDisplay();
     }
 
-    private void DisplayDebug(UIGameHUD hud)
+    private void DisplayDebug()
     {
-        ClearTexts(hud);
-        SetText(hud, 0, "── [ 디버그 ] ──", Color.cyan);
-        SetText(hud, 1, "1. 레벨 100 설정", Color.cyan);
-        SetText(hud, 2, "2. 1차 각성 돌파", Color.cyan);
-        SetText(hud, 3, "3. 2차 각성 돌파", Color.cyan);
-        SetText(hud, 4, "4. 전체 초기화", Color.cyan);
-        SetText(hud, 5, "5. 모든 재료 +10", new Color(0f, 1f, 0.8f));
-        SetText(hud, 6, "", Color.white);
-        SetText(hud, 7, "", Color.white);
-        SetText(hud, 8, "0. 뒤로가기", Color.white);
+        ClearTexts();
+        SetText(0, "── [ 디버그 ] ──", Color.cyan);
+        SetText(1, "1. 레벨 100 설정", Color.cyan);
+        SetText(2, "2. 1차 각성 돌파", Color.cyan);
+        SetText(3, "3. 2차 각성 돌파", Color.cyan);
+        SetText(4, "4. 전체 초기화", Color.cyan);
+        SetText(5, "5. 모든 재료 +10", new Color(0f, 1f, 0.8f));
+        SetText(6, "", Color.white);
+        SetText(7, "", Color.white);
+        SetText(8, "0. 뒤로가기", Color.white);
     }
 
     // =========================================================================
     // 거래 탐색 (TradeSearch)
     // =========================================================================
-    private void HandleTradeSearchInput(int key, UIGameHUD hud)
+    private void HandleTradeSearchInput(int key)
     {
         if (key == -2) // 0번 -> 뒤로
         {
             CurrentState = InventoryViewState.Main;
-            RefreshDisplay(hud);
+            RefreshDisplay();
             return;
         }
 
@@ -446,7 +528,7 @@ public class InventoryUIController
         {
             trade.AcceptTradeServerRpc(trade.PendingRequests[inputNumber - 1]);
             CurrentState = InventoryViewState.TradeSession; // 즉각 세션으로
-            RefreshDisplay(hud);
+            RefreshDisplay();
             return;
         }
 
@@ -458,22 +540,22 @@ public class InventoryUIController
             int cacheIndex = inputNumber - nearbyStartIndex;
             trade.RequestTradeServerRpc(nearbyPlayersCache[cacheIndex]);
             Debug.Log($"[Trade] Player_{nearbyPlayersCache[cacheIndex]} 에게 거래 요청 전송");
-            RefreshDisplay(hud);
+            RefreshDisplay();
             return;
         }
     }
 
-    private void DisplayTradeSearch(UIGameHUD hud)
+    private void DisplayTradeSearch()
     {
-        ClearTexts(hud);
+        ClearTexts();
         if (trade != null && trade.IsTrading.Value)
         {
             CurrentState = InventoryViewState.TradeSession;
-            RefreshDisplay(hud);
+            RefreshDisplay();
             return;
         }
 
-        SetText(hud, 0, "── [ 플레이어 거래 ] ──", new Color(0.3f, 0.8f, 1f));
+        SetText(0, "── [ 플레이어 거래 ] ──", new Color(0.3f, 0.8f, 1f));
         
         int line = 1;
         if (trade != null)
@@ -481,7 +563,7 @@ public class InventoryUIController
             // 나에게 온 요청 목록
             for (int i = 0; i < trade.PendingRequests.Count && line < 4; i++)
             {
-                SetText(hud, line, $"{line}. [요청 옴] Player_{trade.PendingRequests[i]} 수락", new Color(0.2f, 1f, 0.2f));
+                SetText(line, $"{line}. [요청 옴] Player_{trade.PendingRequests[i]} 수락", new Color(0.2f, 1f, 0.2f));
                 line++;
             }
             
@@ -489,18 +571,18 @@ public class InventoryUIController
             nearbyPlayersCache = trade.GetAllPlayers();
             for (int i = 0; i < nearbyPlayersCache.Count && line < 8; i++)
             {
-                SetText(hud, line, $"{line}. [요청 하기] Player_{nearbyPlayersCache[i]}", Color.gray);
+                SetText(line, $"{line}. [요청 하기] Player_{nearbyPlayersCache[i]}", Color.gray);
                 line++;
             }
         }
         
-        SetText(hud, 8, "0. 뒤로가기", Color.white);
+        SetText(8, "0. 뒤로가기", Color.white);
     }
 
     // =========================================================================
     // 거래 세션 (TradeSession)
     // =========================================================================
-    private void HandleTradeSessionInput(int key, UIGameHUD hud)
+    private void HandleTradeSessionInput(int key)
     {
         if (trade == null) return;
         
@@ -508,46 +590,46 @@ public class InventoryUIController
         {
             trade.CancelTradeServerRpc();
             CurrentState = InventoryViewState.Main;
-            RefreshDisplay(hud);
+            RefreshDisplay();
             return;
         }
 
         if (!trade.IsTrading.Value)
         {
             CurrentState = InventoryViewState.Main;
-            RefreshDisplay(hud);
+            RefreshDisplay();
             return;
         }
 
         if (key == 0) // 1번 -> 아이템 올리기
         {
             CurrentState = InventoryViewState.TradeInventorySelect;
-            RefreshDisplay(hud);
+            RefreshDisplay();
         }
         else if (key == 1) // 2번 -> 준비 완료 토글
         {
             trade.SetReadyServerRpc(!trade.IsReady.Value);
-            RefreshDisplay(hud); // 즉각 갱신 후 서버에서 동기화 올때 다시 Refresh
+            RefreshDisplay(); // 즉각 갱신 후 서버에서 동기화 올때 다시 Refresh
         }
     }
 
-    private void DisplayTradeSession(UIGameHUD hud)
+    private void DisplayTradeSession()
     {
-        ClearTexts(hud);
+        ClearTexts();
         if (trade == null || !trade.IsTrading.Value)
         {
             CurrentState = InventoryViewState.Main;
-            RefreshDisplay(hud);
+            RefreshDisplay();
             return;
         }
 
-        SetText(hud, 0, $"── [ 취소 0번 / 거래중 : Player_{trade.TradePartnerId.Value} ] ──", new Color(0.3f, 0.8f, 1f));
+        SetText(0, $"── [ 취소 0번 / 거래중 : Player_{trade.TradePartnerId.Value} ] ──", new Color(0.3f, 0.8f, 1f));
 
         // 내 상태
         string myStatus = trade.IsReady.Value ? "[준비 완료]" : "[준비 중]";
         Color myColor = trade.IsReady.Value ? Color.green : Color.white;
         string myItem = GetItemNameForTrade(trade.OfferedItemId.Value, trade.OfferedItemCount.Value);
-        SetText(hud, 1, $"[나] {myStatus} {myItem}", myColor);
+        SetText(1, $"[나] {myStatus} {myItem}", myColor);
 
         // 파트너 상태 찾기
         string partnerStatus = "[준비 중]";
@@ -568,11 +650,11 @@ public class InventoryUIController
             }
         }
         
-        SetText(hud, 2, $"[상대] {partnerStatus} {partnerItem}", pColor);
-        SetText(hud, 3, "", Color.black);
-        SetText(hud, 4, "1. 아이템 올리기(1개씩)", new Color(1f, 0.9f, 0.5f));
-        SetText(hud, 5, "2. 레디 / 레디 해제 토글", new Color(1f, 0.9f, 0.5f));
-        SetText(hud, 8, "0. 거래 취소/종료", Color.red);
+        SetText(2, $"[상대] {partnerStatus} {partnerItem}", pColor);
+        SetText(3, "", Color.black);
+        SetText(4, "1. 아이템 올리기(1개씩)", new Color(1f, 0.9f, 0.5f));
+        SetText(5, "2. 레디 / 레디 해제 토글", new Color(1f, 0.9f, 0.5f));
+        SetText(8, "0. 거래 취소/종료", Color.red);
     }
     
     private string GetItemNameForTrade(int id, int count)
@@ -586,17 +668,17 @@ public class InventoryUIController
     // =========================================================================
     // 거래용 인벤토리 선택 UI (TradeInventorySelect)
     // =========================================================================
-    private void HandleTradeInventorySelectInput(int key, UIGameHUD hud)
+    private void HandleTradeInventorySelectInput(int key)
     {
         if (key == -2)
         {
             CurrentState = InventoryViewState.TradeSession;
-            RefreshDisplay(hud);
+            RefreshDisplay();
             return;
         }
 
-        if (key == 7 && inventory != null) { inventory.PrevPage(); RefreshDisplay(hud); return; }
-        if (key == 8 && inventory != null) { inventory.NextPage(); RefreshDisplay(hud); return; }
+        if (key == 7 && inventory != null) { inventory.PrevPage(); RefreshDisplay(); return; }
+        if (key == 8 && inventory != null) { inventory.NextPage(); RefreshDisplay(); return; }
 
         if (key >= 0 && key < InventorySystem.SLOTS_PER_PAGE && inventory != null && trade != null)
         {
@@ -609,16 +691,16 @@ public class InventoryUIController
                 Debug.Log($"[거래] 아이템 등록 요청: {slot.ItemID} x1");
                 CurrentState = InventoryViewState.TradeSession; 
             }
-            RefreshDisplay(hud);
+            RefreshDisplay();
         }
     }
 
-    private void DisplayTradeInventorySelect(UIGameHUD hud)
+    private void DisplayTradeInventorySelect()
     {
-        ClearTexts(hud);
+        ClearTexts();
         int page = inventory != null ? inventory.CurrentPage + 1 : 1;
         int totalPages = inventory != null ? inventory.TotalPages : 1;
-        SetText(hud, 0, $"── [ 올릴 아이템 선택 ] ({page}/{totalPages}) ──", new Color(1f, 0.9f, 0.5f));
+        SetText(0, $"── [ 올릴 아이템 선택 ] ({page}/{totalPages}) ──", new Color(1f, 0.9f, 0.5f));
 
         List<InventorySlot> pageSlots = inventory != null
             ? inventory.GetCurrentPageSlots()
@@ -633,40 +715,40 @@ public class InventoryUIController
                 {
                     string countStr = itemData.IsStackable ? $" (보유: x{pageSlots[i].Count})" : "";
                     Color color = GetRarityColor(itemData.Rarity);
-                    SetText(hud, i + 1, $"{i + 1}. {itemData.Name}{countStr}", color);
+                    SetText(i + 1, $"{i + 1}. {itemData.Name}{countStr}", color);
                 }
             }
             else
             {
-                SetText(hud, i + 1, $"{i + 1}. [빈 슬롯]", new Color(0.4f, 0.4f, 0.4f));
+                SetText(i + 1, $"{i + 1}. [빈 슬롯]", new Color(0.4f, 0.4f, 0.4f));
             }
         }
 
-        SetText(hud, 8, "8.◀이전  9.▶다음  0.뒤로(취소)", new Color(0.7f, 0.7f, 0.7f));
+        SetText(8, "8.◀이전  9.▶다음  0.뒤로(취소)", new Color(0.7f, 0.7f, 0.7f));
     }
 
     // =========================================================================
     // 유틸리티
     // =========================================================================
-    private void ClearTexts(UIGameHUD hud)
+    private void ClearTexts()
     {
-        if (hud.inventoryTexts == null) return;
-        for (int i = 0; i < hud.inventoryTexts.Length; i++)
+        if (inventoryTexts == null) return;
+        for (int i = 0; i < inventoryTexts.Length; i++)
         {
-            if (hud.inventoryTexts[i] != null)
+            if (inventoryTexts[i] != null)
             {
-                hud.inventoryTexts[i].text = "";
-                hud.inventoryTexts[i].color = Color.white;
+                inventoryTexts[i].text = "";
+                inventoryTexts[i].color = Color.white;
             }
         }
     }
 
-    private void SetText(UIGameHUD hud, int index, string text, Color color)
+    private void SetText(int index, string text, Color color)
     {
-        if (hud.inventoryTexts == null || index < 0 || index >= hud.inventoryTexts.Length) return;
-        if (hud.inventoryTexts[index] == null) return;
-        hud.inventoryTexts[index].text = text;
-        hud.inventoryTexts[index].color = color;
+        if (inventoryTexts == null || index < 0 || index >= inventoryTexts.Length) return;
+        if (inventoryTexts[index] == null) return;
+        inventoryTexts[index].text = text;
+        inventoryTexts[index].color = color;
     }
 
     private string BuildMaterialString(RecipeData recipe)

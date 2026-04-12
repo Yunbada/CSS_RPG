@@ -8,11 +8,11 @@ public class PlayerMovement : NetworkBehaviour
     private InputHandle inputHandle;
     private CharacterController characterController;
 
-    [Header("Movement Options")]
-    public float walkSpeed = 3f;
-    public float runSpeed = 5f;
-    public float jumpForce = 1f;
-    public float gravity = -9.81f;
+    [Header("Movement Settings")]
+    [SerializeField] private float walkSpeed = 3f;
+    [SerializeField] private float runSpeed = 5f;
+    [SerializeField] private float jumpForce = 1f;
+    [SerializeField] private float gravity = -9.81f;
 
     private Vector3 velocity;
     

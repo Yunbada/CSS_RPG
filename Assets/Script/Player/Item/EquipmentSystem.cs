@@ -109,10 +109,10 @@ public class EquipmentSystem : NetworkBehaviour
         equippedItems[itemData.Slot] = itemData.ItemID;
 
         // 스탯 적용
-        if (itemData.StatValue != 0 && statSystem.stats.ContainsKey(itemData.StatType))
+        if (itemData.StatValue != 0 && statSystem.HasStat(itemData.StatType))
         {
             var mod = new StatModifier(itemData.StatValue, itemData.IsMultiplicative, this);
-            statSystem.stats[itemData.StatType].AddModifier(mod);
+            statSystem.AddModifier(itemData.StatType, mod);
             appliedModifiers[itemData.Slot] = mod;
         }
 
@@ -150,9 +150,9 @@ public class EquipmentSystem : NetworkBehaviour
         if (appliedModifiers[targetSlot] != null && statSystem != null)
         {
             ItemData itemData = ItemDatabase.Instance?.GetItem(currentItemId);
-            if (itemData != null && statSystem.stats.ContainsKey(itemData.StatType))
+            if (itemData != null && statSystem.HasStat(itemData.StatType))
             {
-                statSystem.stats[itemData.StatType].RemoveModifier(appliedModifiers[targetSlot]);
+                statSystem.RemoveModifier(itemData.StatType, appliedModifiers[targetSlot]);
             }
             appliedModifiers[targetSlot] = null;
         }
@@ -252,10 +252,10 @@ public class EquipmentSystem : NetworkBehaviour
                 if (itemId <= 0) continue;
 
                 ItemData itemData = ItemDatabase.Instance.GetItem(itemId);
-                if (itemData != null && itemData.StatValue != 0 && statSystem.stats.ContainsKey(itemData.StatType))
+                if (itemData != null && itemData.StatValue != 0 && statSystem.HasStat(itemData.StatType))
                 {
                     var mod = new StatModifier(itemData.StatValue, itemData.IsMultiplicative, this);
-                    statSystem.stats[itemData.StatType].AddModifier(mod);
+                    statSystem.AddModifier(itemData.StatType, mod);
                     appliedModifiers[slot] = mod;
                 }
             }
@@ -287,9 +287,9 @@ public class EquipmentSystem : NetworkBehaviour
         float value = isMultiplicative ? Random.Range(1.05f, 1.20f) : Random.Range(5f, 20f);
 
         StatModifier newEquip = new StatModifier(value, isMultiplicative, this);
-        if (statSystem.stats.ContainsKey(randomStat))
+        if (statSystem.HasStat(randomStat))
         {
-            statSystem.stats[randomStat].AddModifier(newEquip);
+            statSystem.AddModifier(randomStat, newEquip);
             Debug.Log($"[EquipmentSystem-Legacy] Stat: {randomStat}, Value: {value}");
         }
     }

@@ -15,7 +15,7 @@ public interface IDamageable
     /// <summary>
     /// 데미지 수용 함수 (네트워크 환경에서는 서버에서만 호출됨)
     /// </summary>
-    void TakeDamage(int amount, ulong attackerId = 0);
+    void TakeDamage(int amount, string skillName = "일반공격", ulong attackerId = 0);
     
     /// <summary>
     /// 대상의 Transform 반환 (VFX 스폰, 타격 위치 계산 등)

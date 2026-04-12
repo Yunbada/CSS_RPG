@@ -32,6 +32,12 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
         ShieldEnergy = Mathf.Clamp(ShieldEnergy + amount, 0, MAX_ENERGY);
     }
 
+    /// <summary>라운드 종료 또는 좀비 전환 시 충전량 초기화</summary>
+    public void ResetShieldEnergy()
+    {
+        ShieldEnergy = 0;
+    }
+
     public void ExecuteSkill(int skillIndex, SkillData skill)
     {
         switch (skillIndex)
@@ -198,7 +204,7 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
                 ps.KnockUpServerRpc(Vector3.up * 6f, 0.5f); // 에어본
                 // 공격력 비례 화상 데미지 부여 (Type 2, 5번, 1초마다, 공격력의 20% 등)
                 float tickDmg = (statSystem != null ? statSystem.GetStat(StatType.Attack) : 100f) * 0.2f;
-                ps.ApplyDoTServerRpc(0, 5, 1f, tickDmg); // 안전하게 고정 데미지 타입(0)으로 수치 꽂아줌
+                ps.ApplyDoTWithAttackerServerRpc(0, 5, 1f, tickDmg, playerState.OwnerClientId); // 공격자 추적 DoT
             }
         }
 

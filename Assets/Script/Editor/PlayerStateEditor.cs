@@ -34,15 +34,17 @@ public class PlayerStateEditor : Editor
         GameObject smearPrefab = CreateSkillVFXPrefab("Smear", "VFX_Dot_MotionSmear.png", new Color(0.4f, 0.6f, 1f, 0.8f), 0.25f, 3.0f);
         GameObject flashPrefab = CreateSkillVFXPrefab("Flash", "VFX_Dot_AbstractFlash.png", new Color(1, 1, 1, 1), 0.2f, 1.5f);
 
-        // 3. 현재 PlayerState 타겟에 할당
-        pState.vfxStraight = straightPrefab;
-        pState.vfxRising = risingPrefab;
-        pState.vfxTyphoon = typhoonPrefab;
-        pState.vfxRupture = rupturePrefab;
-        pState.vfxLightning = lightningPrefab;
-        pState.vfxOrb = orbPrefab;
-        pState.vfxSmear = smearPrefab;
-        pState.vfxAbstractFlash = flashPrefab;
+        // 3. SerializedObject를 통해 private 필드에 안전하게 할당
+        SerializedObject so = new SerializedObject(pState);
+        so.FindProperty("vfxStraight").objectReferenceValue = straightPrefab;
+        so.FindProperty("vfxRising").objectReferenceValue = risingPrefab;
+        so.FindProperty("vfxTyphoon").objectReferenceValue = typhoonPrefab;
+        so.FindProperty("vfxRupture").objectReferenceValue = rupturePrefab;
+        so.FindProperty("vfxLightning").objectReferenceValue = lightningPrefab;
+        so.FindProperty("vfxOrb").objectReferenceValue = orbPrefab;
+        so.FindProperty("vfxSmear").objectReferenceValue = smearPrefab;
+        so.FindProperty("vfxAbstractFlash").objectReferenceValue = flashPrefab;
+        so.ApplyModifiedProperties();
         
         EditorUtility.SetDirty(pState);
         

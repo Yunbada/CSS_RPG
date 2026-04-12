@@ -117,7 +117,7 @@ public class Stat
 
 public class StatSystem : MonoBehaviour
 {
-    public Dictionary<StatType, Stat> stats;
+    private Dictionary<StatType, Stat> stats;
 
     private void Awake()
     {
@@ -136,9 +136,15 @@ public class StatSystem : MonoBehaviour
         };
     }
 
+    /// <summary>해당 스탯 타입이 시스템에 존재하는지 확인</summary>
+    public bool HasStat(StatType type)
+    {
+        return stats != null && stats.ContainsKey(type);
+    }
+
     public float GetStat(StatType type)
     {
-        if (stats.ContainsKey(type))
+        if (stats != null && stats.ContainsKey(type))
             return stats[type].Value;
         return 0f;
     }

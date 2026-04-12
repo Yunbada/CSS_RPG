@@ -9,9 +9,9 @@ using Unity.Netcode;
 public class CombatSystem : MonoBehaviour
 {
     [Header("기본 공격 설정")]
-    public float basicAttackRange = 4f;
-    public float basicAttackCooldown = 0.5f;
-    public float basicAttackMultiplier = 1.0f;
+    [SerializeField] private float basicAttackRange = 4f;
+    [SerializeField] private float basicAttackCooldown = 0.5f;
+    [SerializeField] private float basicAttackMultiplier = 1.0f;
 
     private float basicAttackTimer = 0f;
 
@@ -29,6 +29,18 @@ public class CombatSystem : MonoBehaviour
 
     // 총 데미지 카운터 (내가 때린 누적 데미지)
     public int TotalDamageDealt { get; private set; } = 0;
+
+    /// <summary>DoT 데미지를 누적 데미지에 합산 (서버에서 호출)</summary>
+    public void AddDotDamage(int damage)
+    {
+        TotalDamageDealt += damage;
+    }
+
+    /// <summary>라운드 종료 시 데미지 카운터 초기화</summary>
+    public void ResetDamageCounter()
+    {
+        TotalDamageDealt = 0;
+    }
 
     private void Awake()
     {
@@ -125,10 +137,7 @@ public class CombatSystem : MonoBehaviour
         if (basicAttackTimer > 0f)
             basicAttackTimer -= Time.deltaTime;
 
-        // 전직 메뉴 열려있으면 공격 차단
-        var classCtrl = FindFirstObjectByType<ClassSelectionController>();
-        if (classCtrl != null && classCtrl.panel != null && classCtrl.panel.activeSelf)
-            return;
+        // TODO: 전직 UI가 열려있을 때 공격 차단 로직은 새 UI 시스템 구현 시 재연결
 
         // 스킬 사용 중이면 기본 공격 차단
         if (IsUsingSkill) return;
@@ -170,8 +179,7 @@ public class CombatSystem : MonoBehaviour
                 if (damaged.Add(targetState)) // 중복 타격 방지
                 {
                     int damage = CalculateDamage(basicAttackMultiplier, targetState);
-                    SendDamage(targetState, damage, hit.point);
-                    Debug.Log($"기본 공격! 다중 {damage} 데미지 적중!");
+                    SendDamage(targetState, damage, "기본 공격", hit.point);
                 }
             }
         }
@@ -237,7 +245,7 @@ public class CombatSystem : MonoBehaviour
                 if (targetState.CurrentTeam == playerState.currentTeam.Value) continue;
 
                 int damage = CalculateDamage(skill.damageMultiplier, targetState);
-                SendDamage(targetState, damage, hit.point);
+                SendDamage(targetState, damage, skill.skillName, hit.point);
                 Debug.Log($"[{skill.skillName}] 단일 공격! {damage} 데미지!");
                 return; // 최초의 유효한 대상 하나만 타격
             }
@@ -258,7 +266,7 @@ public class CombatSystem : MonoBehaviour
                 if (targetState.CurrentTeam == playerState.currentTeam.Value) continue;
 
                 int damage = CalculateDamage(skill.damageMultiplier, targetState);
-                SendDamage(targetState, damage, col.ClosestPoint(center)); // 가장 가까운 표면 지점을 타격 지점으로 전달
+                SendDamage(targetState, damage, skill.skillName, col.ClosestPoint(center)); // 가장 가까운 표면 지점을 타격 지점으로 전달
                 hitCount++;
             }
         }
@@ -301,11 +309,11 @@ public class CombatSystem : MonoBehaviour
     // 데미지 전송 (PlayerState의 ServerRpc를 통해)
     // =========================================================================
     // 서버 RPC 호출 위임 (타격 지점 포함)
-    private void SendDamage(IDamageable target, int damage, Vector3 hitPosition)
+    private void SendDamage(IDamageable target, int damage, string skillName, Vector3 hitPosition)
     {
         if (playerState != null && target != null)
         {
-            playerState.AttackTargetServerRpc(target.GetNetworkObject(), damage, hitPosition);
+            playerState.AttackTargetServerRpc(target.GetNetworkObject(), damage, skillName, hitPosition);
             TotalDamageDealt += damage; // 누적 데미지 기록
             
             // 성기사 방패 에너지 후킹 (리플렉션 또는 빠른 캐스팅)
@@ -326,8 +334,7 @@ public class CombatSystem : MonoBehaviour
         int damage = CalculateDamage(skillMultiplier, target);
         // hitPosition이 기본값이면 대상의 몸통(Vector3.up) 지점 사용
         Vector3 finalHitPos = hitPosition == default ? target.EntityTransform.position + Vector3.up : hitPosition;
-        SendDamage(target, damage, finalHitPos);
-        Debug.Log($"[{skillName}] {damage} 데미지!");
+        SendDamage(target, damage, skillName, finalHitPos);
     }
 
     public void ResetTotalDamage()

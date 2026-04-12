@@ -4,10 +4,10 @@ using UnityEngine;
 
 public enum RoundState
 {
-    Waiting,
-    RoundStarted,
-    InfectionStarted,
-    RoundEnded
+    Waiting,        // 라운드 시작 전 (로비 대기)
+    RoundStarted,   // 라운드 시작됨 (감염 전 준비 시간)
+    InfectionStarted, // 감염 발동 (좀비 등장)
+    RoundEnded      // 라운드 종료 (보상 처리 중)
 }
 
 public class RoundManager : NetworkBehaviour
@@ -20,9 +20,23 @@ public class RoundManager : NetworkBehaviour
     private List<PlayerState> allPlayers = new List<PlayerState>();
     public IReadOnlyList<PlayerState> AllPlayers => allPlayers;
 
-    private const float ROUND_TIME_LIMIT = 180f; // 3 minutes
-    private const float INFECTION_TIME = 10f; // 10 seconds after round starts
+    // =========================================================================
+    // 상수 설정
+    // =========================================================================
+    private const float ROUND_TIME_LIMIT = 180f;   // 3분
+    private const float INFECTION_TIME = 10f;      // 라운드 시작 10초 후 감염
+    private const int INFECTION_RATIO = 8;         // 8:1 비율 (8명당 1좀비)
+    private const float EVOLUTION_INTERVAL = 60f;  // 좀비 진화 주기
     private float nextEvolutionTime;
+
+    // =========================================================================
+    // 라운드 후 보상 상수
+    // =========================================================================
+    private const float DMG_TO_EXP_RATE = 0.01f;         // DMG의 1% → EXP
+    private const int HUMAN_SURVIVAL_EXP = 100;           // 생존 인간 보너스 EXP
+    private const int HUMAN_SURVIVAL_GOLD = 30;           // 생존 인간 보너스 골드
+    private const int HOST_ZOMBIE_CONVERT_EXP = 10;       // 숙주 좀비: 전환 1회당 EXP
+    private const int NORMAL_ZOMBIE_CONVERT_EXP = 20;     // 일반 좀비: 전환 1회당 EXP
 
     private void Awake()
     {
@@ -34,6 +48,9 @@ public class RoundManager : NetworkBehaviour
         Instance = this;
     }
 
+    // =========================================================================
+    // 플레이어 등록/해제
+    // =========================================================================
     public void RegisterPlayer(PlayerState player)
     {
         if (!allPlayers.Contains(player))
@@ -41,10 +58,26 @@ public class RoundManager : NetworkBehaviour
             allPlayers.Add(player);
         }
 
-        // 2명 이상일 때 게임 자동 시작 테스트 (원하는 조건으로 변경 가능)
-        if (currentState.Value == RoundState.Waiting && allPlayers.Count >= 2)
+        if (currentState.Value == RoundState.Waiting)
         {
-            StartRound();
+            // 대기 중: (0,0,0) 좌표에 스폰
+            TeleportPlayer(player, Vector3.up); // (0,1,0) 바닥 위
+
+            // 2명 이상이면 자동 시작
+            if (IsServer && allPlayers.Count >= 2)
+            {
+                StartRound();
+            }
+        }
+        else if (currentState.Value == RoundState.InfectionStarted)
+        {
+            // 라운드 진행 중 참여 → 관전 모드 (인간 팀이지만 무적 + 비활성)
+            if (IsServer)
+            {
+                player.currentTeam.Value = Team.Human;
+                player.isInvincible.Value = true; // 관전 상태에서는 무적
+                SetPlayerSpectatorClientRpc(player.OwnerClientId, true);
+            }
         }
     }
 
@@ -57,15 +90,46 @@ public class RoundManager : NetworkBehaviour
         }
     }
 
+    // =========================================================================
+    // 라운드 시작
+    // =========================================================================
     public void StartRound()
     {
         if (!IsServer) return;
         
         currentState.Value = RoundState.RoundStarted;
         roundTimer.Value = ROUND_TIME_LIMIT;
-        nextEvolutionTime = ROUND_TIME_LIMIT - 60f;
+        nextEvolutionTime = ROUND_TIME_LIMIT - EVOLUTION_INTERVAL;
+
+        // 모든 플레이어 초기화: (0,0,0) 스폰, 인간 팀, 데이터 로드 유지
+        foreach (var p in allPlayers)
+        {
+            if (p == null) continue;
+            p.currentTeam.Value = Team.Human;
+            p.currentZombieType.Value = ZombieType.None;
+            p.maxHealth.Value = 100;
+            p.currentHealth.Value = 100;
+            p.isInvincible.Value = false;
+            p.ResetRoundCounters();
+
+            // CombatSystem 데미지 카운터 리셋
+            var combat = p.GetComponentInChildren<CombatSystem>();
+            if (combat != null) combat.ResetDamageCounter();
+
+            // 팔라딘 충전량 초기화
+            var paladin = p.GetComponentInChildren<PaladinSkillExecutor>();
+            if (paladin != null) paladin.ResetShieldEnergy();
+
+            // (0,0,0) 좌표에 스폰
+            TeleportPlayer(p, Vector3.up);
+        }
+
+        Debug.Log($"[RoundManager] 라운드 시작! 인원: {allPlayers.Count}명");
     }
 
+    // =========================================================================
+    // 매 프레임 업데이트
+    // =========================================================================
     private void Update()
     {
         if (!IsServer || currentState.Value == RoundState.Waiting || currentState.Value == RoundState.RoundEnded) 
@@ -75,7 +139,7 @@ public class RoundManager : NetworkBehaviour
 
         if (currentState.Value == RoundState.RoundStarted)
         {
-            // 감염 시작 타이밍 확인 (3분 - 10초 = 2분 50초)
+            // 10초 후 감염 발동
             if (ROUND_TIME_LIMIT - roundTimer.Value >= INFECTION_TIME)
             {
                 TriggerInfection();
@@ -83,17 +147,19 @@ public class RoundManager : NetworkBehaviour
         }
         else if (currentState.Value == RoundState.InfectionStarted)
         {
+            // 좀비 진화 (60초마다)
             if (roundTimer.Value <= nextEvolutionTime)
             {
                 EvolveRandomZombie();
-                nextEvolutionTime -= 60f;
+                nextEvolutionTime -= EVOLUTION_INTERVAL;
             }
         }
 
+        // 시간 종료 → 인간 승리 (1명이라도 남아있으므로)
         if (roundTimer.Value <= 0)
         {
             roundTimer.Value = 0;
-            EndRound(Team.Human); // 시간 초과 시 인간 승리
+            EndRound(Team.Human);
         }
         else
         {
@@ -101,18 +167,43 @@ public class RoundManager : NetworkBehaviour
         }
     }
 
+    // =========================================================================
+    // 감염 발동: 8:1 비율로 랜덤 숙주 좀비 선정
+    // =========================================================================
     private void TriggerInfection()
     {
         currentState.Value = RoundState.InfectionStarted;
         
         if (allPlayers.Count == 0) return;
 
-        int hostIndex = Random.Range(0, allPlayers.Count);
-        allPlayers[hostIndex].currentTeam.Value = Team.HostZombie;
+        // 8:1 비율 계산: 총 인원 / (INFECTION_RATIO + 1) = 좀비 수 (최소 1명)
+        int zombieCount = Mathf.Max(1, allPlayers.Count / (INFECTION_RATIO + 1));
         
-        Debug.Log("Infection Started! Host selected.");
+        // 셔플 후 앞에서 zombieCount명을 숙주 좀비로 선정
+        List<int> indices = new List<int>();
+        for (int i = 0; i < allPlayers.Count; i++) indices.Add(i);
+        ShuffleList(indices);
+
+        for (int i = 0; i < zombieCount && i < indices.Count; i++)
+        {
+            var target = allPlayers[indices[i]];
+            target.currentTeam.Value = Team.HostZombie;
+            // 좌표는 그대로 (감염 당시 위치에서 좀비로 변환)
+            
+            // 팔라딘 충전량 초기화
+            var paladin = target.GetComponentInChildren<PaladinSkillExecutor>();
+            if (paladin != null) paladin.ResetShieldEnergy();
+
+            string nick = target.Nickname.Value.ToString();
+            Debug.Log($"[Infection] {nick}이(가) 숙주 좀비로 감염!");
+        }
+        
+        Debug.Log($"[RoundManager] 감염 시작! 숙주 좀비 {zombieCount}명 선정");
     }
 
+    // =========================================================================
+    // 좀비 진화 (일반 좀비 → Speed/Tank/Jump 랜덤 진화)
+    // =========================================================================
     private void EvolveRandomZombie()
     {
         List<PlayerState> normalZombies = new List<PlayerState>();
@@ -129,42 +220,121 @@ public class RoundManager : NetworkBehaviour
             int randIndex = Random.Range(0, normalZombies.Count);
             int typeRand = Random.Range(1, 4); // 1: Speed, 2: Tank, 3: Jump
             normalZombies[randIndex].currentZombieType.Value = (ZombieType)typeRand;
-            Debug.Log($"Zombie Evolved into {(ZombieType)typeRand}!");
+            Debug.Log($"[Evolution] 좀비 진화 → {(ZombieType)typeRand}!");
         }
     }
 
+    // =========================================================================
+    // 승리 조건 확인
+    // =========================================================================
     private void CheckWinCondition()
     {
         if (currentState.Value != RoundState.InfectionStarted) return;
 
         int humanCount = 0;
-        int zombieCount = 0;
-
         foreach (var player in allPlayers)
         {
-            if (player.currentTeam.Value == Team.Human) humanCount++;
-            else zombieCount++;
+            if (player != null && player.currentTeam.Value == Team.Human)
+                humanCount++;
         }
 
+        // 모든 인간이 좀비가 됨 → 좀비 승리
         if (humanCount == 0)
         {
-            EndRound(Team.HostZombie); // 좀비 진영 승리
+            EndRound(Team.HostZombie);
         }
-        else if (zombieCount == 0)
-        {
-            EndRound(Team.Human); // 인간 진영 승리
-        }
+        // 좀비가 0명 (전원 인간) → 이론상 감염 직후에는 불가능하지만 안전장치
     }
 
+    // =========================================================================
+    // 라운드 종료 + 보상 처리
+    // =========================================================================
     private void EndRound(Team winningTeam)
     {
         currentState.Value = RoundState.RoundEnded;
-        Debug.Log("Round Ended! Winner: " + winningTeam.ToString());
+        Debug.Log($"[RoundManager] 라운드 종료! 승리: {winningTeam}");
         
-        // 보상 지급 및 다음 라운드 준비 로직 (3초 후 재시작)
-        Invoke(nameof(ResetRound), 3f);
+        foreach (var p in PlayerState.AllPlayersList)
+        {
+            if (p == null) continue;
+
+            var pExp = p.GetComponentInChildren<PlayerExperience>();
+            int totalExpReward = 0;
+            int totalGoldReward = 0;
+
+            // ---------------------------------------------------------------
+            // (1) DMG의 1% → EXP (모든 플레이어)
+            // ---------------------------------------------------------------
+            int serverDmg = p.totalDamageDealt.Value;
+            if (serverDmg > 0)
+            {
+                int dmgExp = Mathf.Max(1, Mathf.FloorToInt(serverDmg * DMG_TO_EXP_RATE));
+                totalExpReward += dmgExp;
+                Debug.Log($"  [{p.Nickname.Value}] DMG:{serverDmg} → EXP +{dmgExp}");
+            }
+
+            // ---------------------------------------------------------------
+            // (2) 생존 인간 보너스: +100 EXP, +30 Gold
+            // ---------------------------------------------------------------
+            if (p.currentTeam.Value == Team.Human)
+            {
+                totalExpReward += HUMAN_SURVIVAL_EXP;
+                totalGoldReward += HUMAN_SURVIVAL_GOLD;
+                Debug.Log($"  [{p.Nickname.Value}] 생존 보너스: EXP +{HUMAN_SURVIVAL_EXP}, Gold +{HUMAN_SURVIVAL_GOLD}");
+            }
+
+            // ---------------------------------------------------------------
+            // (3) 숙주 좀비: 전환 횟수 × 10 EXP
+            // ---------------------------------------------------------------
+            if (p.currentTeam.Value == Team.HostZombie && p.zombieConversionCount.Value > 0)
+            {
+                int convExp = p.zombieConversionCount.Value * HOST_ZOMBIE_CONVERT_EXP;
+                totalExpReward += convExp;
+                Debug.Log($"  [{p.Nickname.Value}] 숙주 좀비 전환 보상: {p.zombieConversionCount.Value}회 × {HOST_ZOMBIE_CONVERT_EXP} = EXP +{convExp}");
+            }
+
+            // ---------------------------------------------------------------
+            // (4) 일반 좀비: 전환 횟수 × 20 EXP
+            // ---------------------------------------------------------------
+            if (p.currentTeam.Value == Team.NormalZombie && p.zombieConversionCount.Value > 0)
+            {
+                int convExp = p.zombieConversionCount.Value * NORMAL_ZOMBIE_CONVERT_EXP;
+                totalExpReward += convExp;
+                Debug.Log($"  [{p.Nickname.Value}] 일반 좀비 전환 보상: {p.zombieConversionCount.Value}회 × {NORMAL_ZOMBIE_CONVERT_EXP} = EXP +{convExp}");
+            }
+
+            // ---------------------------------------------------------------
+            // 서버에서 EXP 지급
+            // ---------------------------------------------------------------
+            if (totalExpReward > 0 && pExp != null)
+            {
+                pExp.AddExp(totalExpReward);
+            }
+
+            // ---------------------------------------------------------------
+            // (5) 데이터 저장 트리거 (클라이언트에서 로컬 파일 저장)
+            // ---------------------------------------------------------------
+            p.SavePlayerDataClientRpc(totalExpReward, totalGoldReward);
+
+            // 서버 측 카운터 리셋
+            p.ResetRoundCounters();
+
+            // 클라이언트 측 DMG 카운터 리셋
+            var combat = p.GetComponentInChildren<CombatSystem>();
+            if (combat != null) combat.ResetDamageCounter();
+
+            // 팔라딘 충전량 초기화
+            var paladin = p.GetComponentInChildren<PaladinSkillExecutor>();
+            if (paladin != null) paladin.ResetShieldEnergy();
+        }
+
+        // 5초 후 다음 라운드 준비
+        Invoke(nameof(ResetRound), 5f);
     }
 
+    // =========================================================================
+    // 라운드 리셋 → 다음 라운드 시작
+    // =========================================================================
     private void ResetRound()
     {
         if (!IsServer) return;
@@ -173,22 +343,66 @@ public class RoundManager : NetworkBehaviour
         {
             if (p != null)
             {
+                // 인간 팀으로 복원, 체력 복구
                 p.currentTeam.Value = Team.Human;
+                p.currentZombieType.Value = ZombieType.None;
                 p.maxHealth.Value = 100; 
-                p.currentHealth.Value = 100; // 인간 체력 복구
+                p.currentHealth.Value = 100;
+                p.isInvincible.Value = false;
 
-                // 스폰 포인트로 원대 복귀
-                var movement = p.GetComponentInParent<PlayerMovement>();
-                if (movement != null)
-                {
-                    var charCtrl = movement.GetComponent<UnityEngine.CharacterController>();
-                    if (charCtrl != null) charCtrl.enabled = false;
-                    movement.transform.position = new Vector3(Random.Range(-5f, 5f), 1f, Random.Range(-5f, 5f)); // 임의 스폰 마커
-                    if (charCtrl != null) charCtrl.enabled = true;
-                }
+                // (0,0,0) 좌표로 리스폰
+                TeleportPlayer(p, Vector3.up);
             }
         }
         
-        StartRound(); // 라운드 타이머(3분) 재시작
+        StartRound();
+    }
+
+    // =========================================================================
+    // 헬퍼: 플레이어 텔레포트
+    // =========================================================================
+    private void TeleportPlayer(PlayerState player, Vector3 position)
+    {
+        var movement = player.GetComponentInParent<PlayerMovement>();
+        if (movement != null)
+        {
+            var charCtrl = movement.GetComponent<UnityEngine.CharacterController>();
+            if (charCtrl != null) charCtrl.enabled = false;
+            movement.transform.position = position;
+            if (charCtrl != null) charCtrl.enabled = true;
+        }
+    }
+
+    // =========================================================================
+    // 헬퍼: 리스트 셔플 (Fisher-Yates)
+    // =========================================================================
+    private void ShuffleList<T>(List<T> list)
+    {
+        for (int i = list.Count - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            T temp = list[i];
+            list[i] = list[j];
+            list[j] = temp;
+        }
+    }
+
+    // =========================================================================
+    // 관전 모드 (라운드 중 참여 시)
+    // =========================================================================
+    [ClientRpc]
+    private void SetPlayerSpectatorClientRpc(ulong targetClientId, bool isSpectator)
+    {
+        if (NetworkManager.Singleton.LocalClientId != targetClientId) return;
+        
+        // 관전 모드: 이동/공격 비활성화 (간단 구현)
+        var localPlayer = NetworkManager.Singleton.LocalClient.PlayerObject;
+        if (localPlayer != null)
+        {
+            var combat = localPlayer.GetComponentInChildren<CombatSystem>();
+            if (combat != null) combat.enabled = !isSpectator;
+            
+            Debug.Log(isSpectator ? "[관전 모드] 다음 라운드까지 관전합니다." : "[관전 해제] 참여합니다.");
+        }
     }
 }

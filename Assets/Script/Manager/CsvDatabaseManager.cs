@@ -14,8 +14,10 @@ public class UserData
     public int Leather;
     public int Tooth;
     public int Skull;
+    public int Gold;              // 재화 (원)
     public string InventoryData;  // "itemId:count;itemId:count;..." 형식
     public string EquipmentData;  // "Weapon:1001,Helmet:0,..." 형식
+    public string Nickname;       // 플레이어 닉네임
 }
 
 public static class LocalUserData
@@ -44,7 +46,7 @@ public class CsvDatabase : MonoBehaviour
     {
         if (!File.Exists(filePath))
         {
-            string header = "PersonalCode,ID,Password,Level,Exp,ClassIndex,Leather,Tooth,Skull,InventoryData,EquipmentData\n";
+            string header = "PersonalCode,ID,Password,Level,Exp,ClassIndex,Leather,Tooth,Skull,Gold,InventoryData,EquipmentData,Nickname\n";
             File.WriteAllText(filePath, header, Encoding.UTF8);
             Debug.Log($"Created new database file at: {filePath}");
         }
@@ -72,9 +74,12 @@ public class CsvDatabase : MonoBehaviour
                 int.TryParse(cols[6], out d.Leather);
                 int.TryParse(cols[7], out d.Tooth);
                 int.TryParse(cols[8], out d.Skull);
+                // Gold 컬럼 (하위 호환)
+                if (cols.Length > 9) int.TryParse(cols[9], out d.Gold);
                 // 새 컬럼 (하위 호환: 없으면 빈 문자열)
-                d.InventoryData = cols.Length > 9 ? cols[9] : "";
-                d.EquipmentData = cols.Length > 10 ? cols[10] : "";
+                d.InventoryData = cols.Length > 10 ? cols[10] : "";
+                d.EquipmentData = cols.Length > 11 ? cols[11] : "";
+                d.Nickname = cols.Length > 12 ? cols[12] : "";
                 cachedData[d.ID] = d;
             }
         }
@@ -83,19 +88,20 @@ public class CsvDatabase : MonoBehaviour
     public void SaveCacheToFile()
     {
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine("PersonalCode,ID,Password,Level,Exp,ClassIndex,Leather,Tooth,Skull,InventoryData,EquipmentData");
+        sb.AppendLine("PersonalCode,ID,Password,Level,Exp,ClassIndex,Leather,Tooth,Skull,Gold,InventoryData,EquipmentData,Nickname");
         foreach(var kvp in cachedData)
         {
             var d = kvp.Value;
             // InventoryData와 EquipmentData에 쉼표가 섞이지 않도록 세미콜론/콜론 구분자 사용 중
             string inv = d.InventoryData ?? "";
             string equip = d.EquipmentData ?? "";
-            sb.AppendLine($"{d.PersonalCode},{d.ID},{d.PW},{d.Level},{d.Exp},{d.ClassIndex},{d.Leather},{d.Tooth},{d.Skull},{inv},{equip}");
+            string nick = d.Nickname ?? "";
+            sb.AppendLine($"{d.PersonalCode},{d.ID},{d.PW},{d.Level},{d.Exp},{d.ClassIndex},{d.Leather},{d.Tooth},{d.Skull},{d.Gold},{inv},{equip},{nick}");
         }
         File.WriteAllText(filePath, sb.ToString(), Encoding.UTF8);
     }
 
-    public bool RegisterUser(string id, string pw)
+    public bool RegisterUser(string id, string pw, string nickname)
     {
         if (cachedData.ContainsKey(id)) return false;
 
@@ -103,8 +109,10 @@ public class CsvDatabase : MonoBehaviour
         UserData newUser = new UserData
         {
             PersonalCode = newCode,
-            ID = id, PW = pw, Level = 1, Exp = 0, ClassIndex = 0,
+            ID = id, PW = pw, Nickname = nickname,
+            Level = 1, Exp = 0, ClassIndex = 0,
             Leather = 0, Tooth = 0, Skull = 0,
+            Gold = 0,
             InventoryData = "", EquipmentData = ""
         };
         

@@ -7,7 +7,7 @@ public class InputHandle : MonoBehaviour
 {
     #region Components
     //숫자키의 번호를 받음!
-    private KeyCode[] keyCodes = {
+    private readonly KeyCode[] keyCodes = {
     KeyCode.Alpha1,
     KeyCode.Alpha2,
     KeyCode.Alpha3,
@@ -20,8 +20,8 @@ public class InputHandle : MonoBehaviour
     };    
 
     //인풋값
-    public string verticallInputName = "Vertical";
-    public string horizontalInputName = "Horizontal";
+    [SerializeField] private string verticalInputName = "Vertical";
+    [SerializeField] private string horizontalInputName = "Horizontal";
     public float verticalInput { get; private set;}
     public float horizontalInput { get; private set;}
     public float mousexInput { get; private set;}
@@ -36,7 +36,7 @@ public class InputHandle : MonoBehaviour
 
     void Update()
     {
-        verticalInput = Input.GetAxis(verticallInputName);
+        verticalInput = Input.GetAxis(verticalInputName);
         horizontalInput = Input.GetAxis(horizontalInputName);
         jumpInput = Input.GetKeyDown(KeyCode.Space);
         runInput = Input.GetKey(KeyCode.LeftShift);

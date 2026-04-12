@@ -99,11 +99,13 @@ public class SkillSystem : MonoBehaviour
             playerState.currentTeam.OnValueChanged -= OnTeamChanged;
     }
 
+    private bool isInvOpen = false;
+
     private void Update()
     {
         if (!isInitialized) return;
 
-        // 쿨타임 감소 로직
+        // 스킬 쿨타임 감소
         for (int i = 0; i < currentSkills.Length; i++)
         {
             if (currentSkills[i] != null && currentSkills[i].currentCooldown > 0f)
@@ -115,43 +117,40 @@ public class SkillSystem : MonoBehaviour
                 {
                     currentSkills[i].currentCooldown = 0f;
                 }
-                
-                // 시간이 줄어드는 것을 UI에 실시간 표기하기 위해 매 프레임 업데이트
-                UpdateHUD(i);
             }
         }
 
-        // 전직 UI가 켜져있을 땐 스킬 단축키 입력을 무시
-        var classCtrl = FindFirstObjectByType<ClassSelectionController>();
-        bool isUIOpen = classCtrl != null && classCtrl.panel != null && classCtrl.panel.activeSelf;
-        
-        var hud = FindFirstObjectByType<UIGameHUD>();
-        bool isInvOpen = hud != null && hud.inventoryPanel != null && hud.inventoryPanel.activeSelf;
-
-        if (inputHandle != null && !isUIOpen)
+        // TODO: 전직 UI가 열려있을 때 입력 차단 로직은 새 UI 시스템 구현 시 재연결
+        if (inputHandle != null)
         {
             int pressedKey = inputHandle.numInput;
 
+            if (invUIController == null)
+            {
+                var inv = GetComponent<InventorySystem>();
+                var equip = GetComponent<EquipmentSystem>();
+                var pExp = GetComponent<PlayerExperience>();
+                var trade = GetComponent<PlayerTradeSystem>();
+                invUIController = new InventoryUIController(inv, equip, playerClass, pExp, trade);
+            }
+
+            // N키 토글
+            if (inputHandle.toggleDebugMenuInput)
+            {
+                isInvOpen = !isInvOpen;
+                invUIController.TogglePanel(isInvOpen);
+            }
+
             if (isInvOpen)
             {
-                // InventoryUIController 초기화 (필요 시)
-                if (invUIController == null)
-                {
-                    var inv = GetComponent<InventorySystem>();
-                    var equip = GetComponent<EquipmentSystem>();
-                    var pExp = GetComponent<PlayerExperience>();
-                    var trade = GetComponent<PlayerTradeSystem>();
-                    invUIController = new InventoryUIController(inv, equip, playerClass, pExp, trade);
-                }
-
                 // 키 입력 처리
                 if (pressedKey != -1) // 어떤 키든 눌렸을 때만
                 {
-                    invUIController.HandleInput(pressedKey, hud);
+                    invUIController.HandleInput(pressedKey);
                 }
 
                 // 매 프레임 디스플레이 갱신 (쿨다운 등 실시간 반영)
-                invUIController.RefreshDisplay(hud);
+                invUIController.RefreshDisplay();
             }
             else
             {
@@ -232,7 +231,6 @@ public class SkillSystem : MonoBehaviour
             }
             
             skill.currentCooldown = skill.cooldownTime;
-            UpdateHUD(index);
         }
         else
         {
@@ -242,14 +240,7 @@ public class SkillSystem : MonoBehaviour
 
     private void UpdateHUD(int index)
     {
-        if (playerState != null && !playerState.IsOwner) return;
-
-        // 최적화를 위해 FindFirstObjectByType 사용 구조 유지 (로컬 클라이언트엔 1개만 존재함)
-        var hud = FindFirstObjectByType<UIGameHUD>();
-        if (hud != null && currentSkills[index] != null)
-        {
-            hud.UpdateSkillUI(index, currentSkills[index].skillName, currentSkills[index].currentCooldown, currentSkills[index].cooldownTime);
-        }
+        // 잔여 UI 코드는 삭제되었으며, 현재는 자체 이벤트 구조로 개편 중입니다.
     }
 
     // =========================================================================
@@ -335,16 +326,7 @@ public class SkillSystem : MonoBehaviour
                 break;
         }
 
-        // 스킬셋이 변경되었으므로 전체 UI를 한 번 초기화 갱신합니다.
-        if (playerState != null && playerState.IsOwner)
-        {
-            var hud = FindFirstObjectByType<UIGameHUD>();
-            if (hud != null)
-            {
-                hud.UpdateClassName(classNameKor);
-                for (int i = 0; i < 9; i++) UpdateHUD(i);
-            }
-        }
+        // 새로운 GUI가 생기기 전까지 스킬 UI 갱신은 생략됩니다.
     }
 
     // =========================================================================
@@ -371,16 +353,7 @@ public class SkillSystem : MonoBehaviour
             // 일반 좀비는 스킬이 없음
         }
 
-        // UI 갱신
-        if (playerState != null && playerState.IsOwner)
-        {
-            var hud = FindFirstObjectByType<UIGameHUD>();
-            if (hud != null)
-            {
-                hud.UpdateClassName(classNameKor);
-                for (int i = 0; i < 9; i++) UpdateHUD(i);
-            }
-        }
+        // 새로운 GUI가 생기기 전까지 스킬 UI 갱신은 생략됩니다.
     }
 
     // 스킬 데이터 입력을 편리하게 하기 위한 헬퍼 함수 (전투 참수 포함)

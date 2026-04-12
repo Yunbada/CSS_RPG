@@ -8,7 +8,7 @@ public class PlayerCamera : NetworkBehaviour
 
     [Header("Camera Options")]
     public Transform cameraTransform;
-    public float mouseSensitivity = 2f;
+    [SerializeField] private float mouseSensitivity = 2f;
     
     private float xRotation = 0f;
 
