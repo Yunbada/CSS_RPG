@@ -25,8 +25,8 @@ public class PlayerState : NetworkBehaviour, IDamageable
 
     public NetworkVariable<Unity.Collections.FixedString32Bytes> Nickname = new NetworkVariable<Unity.Collections.FixedString32Bytes>("", NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-    public NetworkVariable<int> currentHealth = new NetworkVariable<int>(100, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
-    public NetworkVariable<int> maxHealth = new NetworkVariable<int>(100, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public NetworkVariable<int> currentHealth = new NetworkVariable<int>(150, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public NetworkVariable<int> maxHealth = new NetworkVariable<int>(150, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     
     public NetworkVariable<ZombieType> currentZombieType = new NetworkVariable<ZombieType>(ZombieType.None, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
