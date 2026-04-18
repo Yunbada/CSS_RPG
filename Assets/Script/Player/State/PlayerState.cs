@@ -23,6 +23,8 @@ public class PlayerState : NetworkBehaviour, IDamageable
     public Transform EntityTransform => transform;
     public NetworkObject GetNetworkObject() => NetworkObject;
 
+    public bool isLoggedIn = false;
+
     public NetworkVariable<Unity.Collections.FixedString32Bytes> Nickname = new NetworkVariable<Unity.Collections.FixedString32Bytes>("", NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     public NetworkVariable<int> currentHealth = new NetworkVariable<int>(150, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -69,6 +71,8 @@ public class PlayerState : NetworkBehaviour, IDamageable
     [SerializeField] private Transform weaponTransform;
     public Transform WeaponTransform => weaponTransform;
 
+    public NetworkVariable<bool> isEnteredGame = new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
     public override void OnNetworkSpawn()
     {
         if (!AllPlayersList.Contains(this))
@@ -81,32 +85,135 @@ public class PlayerState : NetworkBehaviour, IDamageable
             currentZombieType.Value = ZombieType.None;
             currentHealth.Value = maxHealth.Value;
             isInvincible.Value = false;
-            
-            // Register to RoundManager
-            if (RoundManager.Instance != null)
-            {
-                RoundManager.Instance.RegisterPlayer(this);
-            }
         }
-        
-        if (IsOwner && LocalUserData.Current != null)
-        {
-            SetNicknameServerRpc(LocalUserData.Current.Nickname);
 
-            var mainMenu = GameObject.Find("MainMenu_Canvas");
+        if (IsOwner)
+        {
+            isLoggedIn = false;
+        }
+
+        currentTeam.OnValueChanged += OnTeamChanged;
+        currentZombieType.OnValueChanged += OnZombieTypeChanged;
+        isEnteredGame.OnValueChanged += OnEnteredGameChanged;
+
+        // 즉시 격리/활성화 상태 적용
+        SetPlayerActiveState(isEnteredGame.Value);
+    }
+
+    private void OnEnteredGameChanged(bool oldVal, bool newVal)
+    {
+        SetPlayerActiveState(newVal);
+    }
+    
+    private void SetPlayerActiveState(bool active)
+    {
+        // PlayerState는 RPG_Systems 자식에 있으므로 루트에서 검색
+        var root = transform.root;
+
+        // 모든 클라이언트: 루트 기준 모델/렌더러 토글
+        var renderers = root.GetComponentsInChildren<Renderer>(true);
+        foreach (var r in renderers) r.enabled = active;
+
+        // 서버 전용: 충돌체 토글 (CharacterController는 루트에 있음)
+        if (IsServer)
+        {
+            var cc = root.GetComponent<CharacterController>();
+            if (cc != null) cc.enabled = active;
+        }
+
+        // 로컬 오너 전용: 코루틴으로 지연 처리
+        if (IsOwner)
+        {
+            StartCoroutine(ApplyActiveStateCoroutine(active));
+        }
+    }
+
+    private System.Collections.IEnumerator ApplyActiveStateCoroutine(bool active)
+    {
+        // 다른 컴포넌트들의 Start/OnNetworkSpawn 이 완료될 때까지 대기
+        yield return new WaitForEndOfFrame();
+
+        // ★ PlayerState는 RPG_Systems 자식 → 루트에서 탐색
+        var root = transform.root;
+
+        var cc = root.GetComponent<CharacterController>();
+        if (cc != null) cc.enabled = active;
+
+        var mov = root.GetComponent<PlayerMovement>();
+        if (mov != null) mov.enabled = active;
+
+        // 입력을 원천 차단
+        var input = root.GetComponent<InputHandle>();
+        if (input != null) input.enabled = active;
+
+        var cs = root.GetComponentInChildren<CombatSystem>();
+        if (cs != null) cs.enabled = active;
+
+        var skillSys = root.GetComponentInChildren<SkillSystem>();
+        if (skillSys != null) skillSys.enabled = active;
+        
+        var pCam = root.GetComponent<PlayerCamera>();
+        if (pCam != null) pCam.enabled = active;
+        
+        // HUD 비활성화 (게임 미입장 시)
+        var hud = FindObjectOfType<UIGameHUDRuntime>();
+        if (hud != null)
+        {
+            hud.gameObject.SetActive(active);
+        }
+
+        if (!active)
+        {
+            // 지하 격리: 루트 transform을 이동
+            root.position = new Vector3(0, -1000, 0);
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+        else
+        {
+            // 게임 입장 시 월드 중심으로 스폰
+            root.position = new Vector3(0, 1, 0);
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+            
+            // 자신의 카메라를 활성화
+            var pCamComp = root.GetComponent<PlayerCamera>();
+            if (pCamComp != null && pCamComp.cameraTransform != null)
+            {
+                if (pCamComp.cameraTransform.TryGetComponent<Camera>(out var cam))
+                    cam.enabled = true;
+                if (pCamComp.cameraTransform.TryGetComponent<AudioListener>(out var listener))
+                    listener.enabled = true;
+            }
+
+            // SkillSystem / CombatSystem 지연 초기화
+            var pClass = root.GetComponentInChildren<PlayerClass>();
+            if (pClass != null)
+            {
+                if (skillSys != null)
+                {
+                    skillSys.enabled = true;
+                    skillSys.InitializeSkillSystem(pClass);
+                }
+                if (cs != null)
+                {
+                    cs.enabled = true;
+                    cs.InitializeCombatSystem();
+                }
+            }
+
+            // 로그인 UI 완전히 제거
+            var mainMenu = GameObject.Find("LobbyUI_Canvas");
             if (mainMenu != null)
             {
                 mainMenu.SetActive(false);
             }
         }
-
-        currentTeam.OnValueChanged += OnTeamChanged;
-        currentZombieType.OnValueChanged += OnZombieTypeChanged;
-        
     }
 
     public override void OnNetworkDespawn()
     {
+        base.OnNetworkDespawn();
         if (AllPlayersList.Contains(this))
             AllPlayersList.Remove(this);
 
@@ -117,6 +224,95 @@ public class PlayerState : NetworkBehaviour, IDamageable
         
         currentTeam.OnValueChanged -= OnTeamChanged;
         currentZombieType.OnValueChanged -= OnZombieTypeChanged;
+        isEnteredGame.OnValueChanged -= OnEnteredGameChanged;
+    }
+
+    [Rpc(SendTo.Server, RequireOwnership = true)]
+    public void LoginRequestServerRpc(string id, string pw)
+    {
+        if (CsvDatabase.Instance == null)
+        {
+            Debug.LogError("[Server] CsvDatabase.Instance is null! 데이터베이스 초기화 실패.");
+            AuthResponseClientRpc(false, "", "서버 데이터베이스 오류");
+            return;
+        }
+        var userData = CsvDatabase.Instance.LoginUser(id, pw);
+        if (userData != null)
+        {
+            string json = JsonUtility.ToJson(userData);
+            AuthResponseClientRpc(true, json, "Login Success");
+        }
+        else
+        {
+            AuthResponseClientRpc(false, "", "Invalid ID or Password");
+        }
+    }
+
+    [Rpc(SendTo.Server, RequireOwnership = true)]
+    public void RegisterRequestServerRpc(string id, string pw, string nick)
+    {
+        if (CsvDatabase.Instance == null)
+        {
+            Debug.LogError("[Server] CsvDatabase.Instance is null! 데이터베이스 초기화 실패.");
+            RegisterResponseClientRpc(false, "서버 데이터베이스 오류");
+            return;
+        }
+        bool success = CsvDatabase.Instance.RegisterUser(id, pw, nick);
+        if (success)
+        {
+            RegisterResponseClientRpc(true, "회원가입 완료! 로그인 버튼을 눌러주세요.");
+        }
+        else
+        {
+            RegisterResponseClientRpc(false, "이미 존재하는 ID입니다.");
+        }
+    }
+
+    [Rpc(SendTo.Owner)]
+    public void AuthResponseClientRpc(bool success, string userDataJson, string msg)
+    {
+        UserData data = null;
+        if (success && !string.IsNullOrEmpty(userDataJson))
+        {
+            data = JsonUtility.FromJson<UserData>(userDataJson);
+            isLoggedIn = true;
+            SetNicknameServerRpc(data.Nickname);
+        }
+        
+        if (NetworkManagerUI.Instance != null)
+        {
+            NetworkManagerUI.Instance.OnLoginResponse(success, data, msg);
+        }
+    }
+
+    [Rpc(SendTo.Owner)]
+    public void RegisterResponseClientRpc(bool success, string msg)
+    {
+        if (NetworkManagerUI.Instance != null)
+        {
+            NetworkManagerUI.Instance.OnRegisterResponse(success, msg);
+        }
+    }
+
+    [Rpc(SendTo.Server, RequireOwnership = true)]
+    public void RequestEnterGameServerRpc()
+    {
+        isEnteredGame.Value = true;
+        
+        if (RoundManager.Instance != null)
+            RoundManager.Instance.RegisterPlayer(this);
+        
+        // 텔레포트 위치 지정 후 클라이언트 권한 오브젝트에게 이동 명령
+        Vector3 spawnPos = new Vector3(0, 1, 0); 
+        EnterGameClientRpc(spawnPos);
+    }
+
+    [Rpc(SendTo.Owner)]
+    public void EnterGameClientRpc(Vector3 pos)
+    {
+        transform.position = pos;
+        
+        SetPlayerActiveState(true);
     }
 
     [Rpc(SendTo.Server)]
@@ -377,6 +573,23 @@ public class PlayerState : NetworkBehaviour, IDamageable
         }
     }
 
+    [ClientRpc]
+    public void TeleportClientRpc(Vector3 position)
+    {
+        // 자기 자신의 클라이언트에서 물리적 이동을 수행하여 NetworkTransform과 동기화를 맞춥니다
+        if (IsOwner)
+        {
+            var movement = GetComponentInParent<PlayerMovement>();
+            if (movement != null)
+            {
+                var charCtrl = movement.GetComponent<UnityEngine.CharacterController>();
+                if (charCtrl != null) charCtrl.enabled = false;
+                movement.transform.position = position;
+                if (charCtrl != null) charCtrl.enabled = true;
+            }
+        }
+    }
+
     // 좀비 사망 시 발생하는 전역 이벤트 (킬러의 ClientId 전달)
     public static event System.Action<ulong> OnAnyZombieDied;
 
@@ -419,14 +632,7 @@ public class PlayerState : NetworkBehaviour, IDamageable
         }
         
         // 스폰 장소로 이동 (좀비 리스폰 위치)
-        var movement = GetComponentInParent<PlayerMovement>();
-        if (movement != null)
-        {
-            var charCtrl = movement.GetComponent<UnityEngine.CharacterController>();
-            if (charCtrl != null) charCtrl.enabled = false;
-            movement.transform.position = new Vector3(Random.Range(-5f, 5f), 1f, Random.Range(-5f, 5f));
-            if (charCtrl != null) charCtrl.enabled = true;
-        }
+        TeleportClientRpc(new Vector3(Random.Range(-5f, 5f), 1f, Random.Range(-5f, 5f)));
     }
     
     private void OnTeamChanged(Team previous, Team current)

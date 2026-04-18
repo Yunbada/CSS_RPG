@@ -254,17 +254,25 @@ public class UIGameHUDRuntime : MonoBehaviour
             return;
         }
 
+        var localObj = NetworkManager.Singleton.LocalClient.PlayerObject;
+        var localState = localObj.GetComponentInChildren<PlayerState>();
+
+        // ★ 핵심 수정: 게임에 입장하지 않은 플레이어는 HUD를 절대 보여주지 않음
+        if (localState == null || !localState.isEnteredGame.Value)
+        {
+            if (canvasObj != null) canvasObj.SetActive(false);
+            return;
+        }
+
         // 최초 접속 시 HUD 생성
         if (canvasObj == null) CreateHUD();
         canvasObj.SetActive(true);
 
-        var localObj = NetworkManager.Singleton.LocalClient.PlayerObject;
         pClass = localObj.GetComponentInChildren<PlayerClass>();
 
         // --- 전직 메뉴 C키 토글 (원본 ClassSelectionController 로직) ---
         // 좀비는 전직 메뉴를 열 수 없음
-        var localState = localObj.GetComponentInChildren<PlayerState>();
-        bool isHuman = localState != null && localState.currentTeam.Value == Team.Human;
+        bool isHuman = localState.currentTeam.Value == Team.Human;
 
         if (isHuman && pClass != null && pClass.currentClass.Value == PlayerClassType.None)
         {
@@ -305,7 +313,7 @@ public class UIGameHUDRuntime : MonoBehaviour
         int zombieCount = 0;
         foreach (var p in PlayerState.AllPlayersList)
         {
-            if (p != null)
+            if (p != null && p.isEnteredGame.Value)
             {
                 if (p.currentTeam.Value == Team.Human) humanCount++;
                 else zombieCount++;

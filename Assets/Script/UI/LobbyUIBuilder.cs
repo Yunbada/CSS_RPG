@@ -19,6 +19,10 @@ public class LobbyUIElements
     public GameObject authGroup;
     public GameObject myInfoPanel;
 
+    // 서버 연결 상태 표시
+    public Text serverStatusText;
+    public Button serverConnectBtn;
+
     // 패치노트용 텍스트 (글작성 가능 공간 대체 표시)
     public Text patchNoteContentText;
 }
@@ -160,11 +164,17 @@ public static class LobbyUIBuilder
         Shadow shadow = title.gameObject.AddComponent<Shadow>();
         shadow.effectColor = Color.black; shadow.effectDistance = new Vector2(4, -4);
 
-        // Top Right: 서버 주소 & 시작/내정보
-        CreateText("ServerTitle", canvasObj.transform, new Vector2(-150, -50), new Vector2(250, 40), 30, Color.white, TextAnchor.MiddleCenter, new Vector2(1, 1), new Vector2(1, 1)).text = "서버 주소";
+        // Top Right: 서버 주소 & 서버 접속
+        CreateText("ServerTitle", canvasObj.transform, new Vector2(-200, -50), new Vector2(150, 40), 24, Color.white, TextAnchor.MiddleLeft, new Vector2(1, 1), new Vector2(1, 1)).text = "서버 상태:";
+        elements.serverStatusText = CreateText("ServerStatus", canvasObj.transform, new Vector2(-50, -50), new Vector2(150, 40), 24, Color.red, TextAnchor.MiddleRight, new Vector2(1, 1), new Vector2(1, 1));
+        elements.serverStatusText.text = "🔴 오프라인";
+        
         elements.ipInput = CreateInputField("ServerInput", canvasObj.transform, new Vector2(-150, -100), new Vector2(250, 50), "127.0.0.1", new Vector2(1, 1), new Vector2(1, 1));
-        elements.startClientBtn = CreateButton("StartBtn", canvasObj.transform, new Vector2(-150, -170), new Vector2(250, 50), "시작 (Connect)", new Vector2(1, 1), new Vector2(1, 1), new Color(0.2f, 0.6f, 0.2f));
-        elements.myInfoBtn = CreateButton("MyInfoBtn", canvasObj.transform, new Vector2(-150, -230), new Vector2(250, 50), "내정보 (My Info)", new Vector2(1, 1), new Vector2(1, 1), new Color(0.2f, 0.4f, 0.8f));
+        elements.serverConnectBtn = CreateButton("ServerConnectBtn", canvasObj.transform, new Vector2(-150, -160), new Vector2(250, 40), "서버 접속", new Vector2(1, 1), new Vector2(1, 1), new Color(0.8f, 0.4f, 0.1f));
+        
+        // 로그인 후 사용되는 입장 버튼들
+        elements.startClientBtn = CreateButton("StartBtn", canvasObj.transform, new Vector2(-150, -210), new Vector2(250, 40), "게임 입장 (Enter)", new Vector2(1, 1), new Vector2(1, 1), new Color(0.2f, 0.6f, 0.2f));
+        elements.myInfoBtn = CreateButton("MyInfoBtn", canvasObj.transform, new Vector2(-150, -260), new Vector2(250, 40), "내정보 (My Info)", new Vector2(1, 1), new Vector2(1, 1), new Color(0.2f, 0.4f, 0.8f));
 
         // 시작/내정보 기본 비활성화
         elements.startClientBtn.interactable = false;
@@ -227,7 +237,14 @@ public static class LobbyUIBuilder
         elements.registerBtn = CreateButton("RegisterBtn", authGroupObj.transform, new Vector2(80, -180), new Vector2(140, 50), "회원가입", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Color(0.4f, 0.4f, 0.4f));
 
         elements.messageText = CreateText("MsgText", authGroupObj.transform, new Vector2(0, -250), new Vector2(400, 40), 20, Color.red, TextAnchor.MiddleCenter, new Vector2(0.5f, 1), new Vector2(0.5f, 1));
-        elements.messageText.text = "";
+        elements.messageText.text = "서버 접속 전에는 로그인 불가";
+
+        // 서버 연결 전까지 활성화 금지
+        elements.idInput.interactable = false;
+        elements.pwInput.interactable = false;
+        elements.nickInput.interactable = false;
+        elements.loginBtn.interactable = false;
+        elements.registerBtn.interactable = false;
 
         // Bottom Right (로그인 시 닉네임 노출 텍스트) - 시작 시 숨김
         elements.welcomeText = CreateText("WelcomeText", canvasObj.transform, new Vector2(-150, 150), new Vector2(400, 100), 30, Color.white, TextAnchor.MiddleCenter, new Vector2(1, 0), new Vector2(1, 0));

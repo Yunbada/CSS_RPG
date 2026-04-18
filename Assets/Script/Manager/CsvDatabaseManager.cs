@@ -32,10 +32,30 @@ public class CsvDatabase : MonoBehaviour
     private string filePath;
     private Dictionary<string, UserData> cachedData = new Dictionary<string, UserData>();
 
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void InitializeOnLoad()
+    {
+        if (Instance == null)
+        {
+            var go = new GameObject("CsvDatabaseManager");
+            Instance = go.AddComponent<CsvDatabase>();
+            DontDestroyOnLoad(go);
+            Debug.Log("[CsvDatabase] 자동 생성 완료");
+        }
+    }
+
     private void Awake()
     {
-        if (Instance == null) { Instance = this; DontDestroyOnLoad(gameObject); }
-        else { Destroy(gameObject); return; }
+        if (Instance != null && Instance != this) 
+        { 
+            Destroy(gameObject); 
+            return; 
+        }
+        else if (Instance == null)
+        {
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
 
         filePath = Application.dataPath + "/PlayerData.csv";
         EnsureFileExists();

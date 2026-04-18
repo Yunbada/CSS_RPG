@@ -24,11 +24,14 @@ public class PlayerMovement : NetworkBehaviour
 
     private CombatSystem combatSystem;
 
+    private PlayerState _playerState;
+
     private void Awake()
     {
         inputHandle = GetComponent<InputHandle>();
         characterController = GetComponent<CharacterController>();
         combatSystem = GetComponent<CombatSystem>();
+        _playerState = GetComponent<PlayerState>();
     }
 
     private void Update()
@@ -41,6 +44,10 @@ public class PlayerMovement : NetworkBehaviour
         if (rpgSys != null) rpgSys.localPosition = Vector3.zero;
 
         if (!IsOwner) return;
+
+        // ★ 핵심: 게임 미입장(격리) 중에는 이동 처리하지 않음
+        if (_playerState == null) _playerState = GetComponent<PlayerState>();
+        if (_playerState != null && !_playerState.isEnteredGame.Value) return;
 
         if (combatSystem == null)
             combatSystem = GetComponentInChildren<CombatSystem>();

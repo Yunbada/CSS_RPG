@@ -28,25 +28,28 @@ public class PlayerClass : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         // 런타임 무결성 보장: SkillSystem 컴포넌트 자동 부착
-        if (GetComponent<SkillSystem>() == null)
-            gameObject.AddComponent<SkillSystem>();
+        var skillSys = GetComponent<SkillSystem>();
+        if (skillSys == null)
+            skillSys = gameObject.AddComponent<SkillSystem>();
 
         // 런타임 무결성 보장: CombatSystem 컴포넌트 자동 부착
-        if (GetComponent<CombatSystem>() == null)
-            gameObject.AddComponent<CombatSystem>();
+        var combatSys = GetComponent<CombatSystem>();
+        if (combatSys == null)
+            combatSys = gameObject.AddComponent<CombatSystem>();
+
+        // ★ 핵심 수정: 격리 중(isEnteredGame == false)에는 새로 추가한 컴포넌트도 즉시 비활성화
+        var pState = GetComponent<PlayerState>();
+        bool isActive = pState != null && pState.isEnteredGame.Value;
+        if (skillSys != null) skillSys.enabled = isActive;
+        if (combatSys != null) combatSys.enabled = isActive;
 
         if (IsOwner)
         {
-            var skillSys = GetComponent<SkillSystem>();
-            if (skillSys != null) 
+            // isEnteredGame이 true일 때만 초기화 진행
+            if (isActive)
             {
-                skillSys.InitializeSkillSystem(this);
-            }
-
-            var combatSys = GetComponent<CombatSystem>();
-            if (combatSys != null)
-            {
-                combatSys.InitializeCombatSystem();
+                if (skillSys != null) skillSys.InitializeSkillSystem(this);
+                if (combatSys != null) combatSys.InitializeCombatSystem();
             }
             
             if (LocalUserData.Current != null)

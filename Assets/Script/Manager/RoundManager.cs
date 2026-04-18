@@ -363,14 +363,10 @@ public class RoundManager : NetworkBehaviour
     // =========================================================================
     private void TeleportPlayer(PlayerState player, Vector3 position)
     {
-        var movement = player.GetComponentInParent<PlayerMovement>();
-        if (movement != null)
-        {
-            var charCtrl = movement.GetComponent<UnityEngine.CharacterController>();
-            if (charCtrl != null) charCtrl.enabled = false;
-            movement.transform.position = position;
-            if (charCtrl != null) charCtrl.enabled = true;
-        }
+        // Unity Netcode의 ClientNetworkTransform을 사용할 때, 
+        // 서버에서 transform.position을 바꿔도 클라이언트(Owner) 쪽 트랜스폼 권한이 덮어쓰는 문제가 있습니다.
+        // 그러므로 ClientRpc를 통해서 Client (소유주)에서 물리적 이동을 하도록 호출하여 동기화를 진행합니다.
+        player.TeleportClientRpc(position);
     }
 
     // =========================================================================

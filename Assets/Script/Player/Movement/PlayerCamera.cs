@@ -5,6 +5,7 @@ using UnityEngine;
 public class PlayerCamera : NetworkBehaviour
 {
     private InputHandle inputHandle;
+    private PlayerState _playerState;
 
     [Header("Camera Options")]
     public Transform cameraTransform;
@@ -15,6 +16,7 @@ public class PlayerCamera : NetworkBehaviour
     private void Awake()
     {
         inputHandle = GetComponent<InputHandle>();
+        _playerState = GetComponent<PlayerState>();
         if (cameraTransform == null)
         {
             var cam = GetComponentInChildren<Camera>();
@@ -33,14 +35,16 @@ public class PlayerCamera : NetworkBehaviour
                 mainListener.enabled = false;
             }
 
+            // ★ 핵심 수정: 게임 입장 여부에 따라 플레이어 카메라 on/off
+            if (_playerState == null) _playerState = GetComponent<PlayerState>();
+            bool isEntered = _playerState != null && _playerState.isEnteredGame.Value;
+
             if (cameraTransform != null && cameraTransform.TryGetComponent<Camera>(out var cam))
             {
-                cam.enabled = true;
+                cam.enabled = isEntered;
                 if (cameraTransform.TryGetComponent<AudioListener>(out var listener))
-                    listener.enabled = true;
+                    listener.enabled = isEntered;
             }
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
         }
         else
         {
@@ -56,6 +60,10 @@ public class PlayerCamera : NetworkBehaviour
     private void Update()
     {
         if (!IsOwner) return;
+
+        // ★ 격리 중에는 카메라 회전 처리하지 않음
+        if (_playerState == null) _playerState = GetComponent<PlayerState>();
+        if (_playerState != null && !_playerState.isEnteredGame.Value) return;
 
         HandleLook();
     }

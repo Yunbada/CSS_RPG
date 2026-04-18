@@ -3,12 +3,14 @@ using Unity.Netcode;
 
 public class NetworkManagerUI : MonoBehaviour
 {
-    // Legacy fields removed
+    public static NetworkManagerUI Instance { get; private set; }
 
     private LobbyUIElements lobbyUI;
 
     private void Awake()
     {
+        Instance = this;
+
         // CsvDatabase가 없다면 자동 추가 (서버 연동 전 MVP 용)
         if (FindFirstObjectByType<CsvDatabase>() == null)
         {
@@ -33,7 +35,8 @@ public class NetworkManagerUI : MonoBehaviour
         // 이벤트 연결
         if (lobbyUI.loginBtn != null) lobbyUI.loginBtn.onClick.AddListener(OnLoginClicked);
         if (lobbyUI.registerBtn != null) lobbyUI.registerBtn.onClick.AddListener(OnRegisterClicked);
-        if (lobbyUI.startClientBtn != null) lobbyUI.startClientBtn.onClick.AddListener(OnStartClientClicked);
+        if (lobbyUI.serverConnectBtn != null) lobbyUI.serverConnectBtn.onClick.AddListener(OnServerConnectClicked);
+        if (lobbyUI.startClientBtn != null) lobbyUI.startClientBtn.onClick.AddListener(OnEnterGameClicked);
         
         // 내정보 버튼 로직: 클릭 시 텍스트 갱신 후 패널 On/Off
         if (lobbyUI.myInfoBtn != null) 
@@ -50,6 +53,24 @@ public class NetworkManagerUI : MonoBehaviour
         }
     }
 
+    private void Start()
+    {
+        if (NetworkManager.Singleton != null)
+        {
+            NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
+            NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (NetworkManager.Singleton != null)
+        {
+            NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
+            NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
+        }
+    }
+
     private void Update()
     {
         // [ 와 ] 키보드 동시 입력 시 서버 헤드리스/은닉 실행
@@ -58,6 +79,89 @@ public class NetworkManagerUI : MonoBehaviour
         {
             Debug.Log("Server shortcut pressed!");
             OnStartServerClicked();
+        }
+    }
+
+    public void OnServerConnectClicked()
+    {
+        if (NetworkManager.Singleton.IsClient || NetworkManager.Singleton.IsServer) return;
+        
+        var transport = NetworkManager.Singleton.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>();
+        if (transport != null)
+        {
+            string targetIp = (lobbyUI.ipInput != null && !string.IsNullOrEmpty(lobbyUI.ipInput.text)) ? lobbyUI.ipInput.text.Trim() : "127.0.0.1";
+            transport.SetConnectionData(targetIp, 7777); 
+        }
+        
+        if (lobbyUI.serverStatusText != null)
+        {
+            lobbyUI.serverStatusText.text = "🟡 연결 중...";
+            lobbyUI.serverStatusText.color = Color.yellow;
+        }
+        
+        NetworkManager.Singleton.StartClient();
+    }
+
+    private void OnClientConnected(ulong clientId)
+    {
+        if (clientId == NetworkManager.Singleton.LocalClientId)
+        {
+            if (lobbyUI.serverStatusText != null)
+            {
+                lobbyUI.serverStatusText.text = "🟢 온라인";
+                lobbyUI.serverStatusText.color = Color.green;
+            }
+
+            ShowMessage("서버에 접속했습니다. 플레이어 준비 중...", Color.yellow);
+
+            // ★ PlayerObject는 연결 직후 바로 스폰되지 않으므로 준비될 때까지 기다림
+            StartCoroutine(WaitForPlayerObjectAndEnableUI());
+        }
+    }
+
+    private System.Collections.IEnumerator WaitForPlayerObjectAndEnableUI()
+    {
+        // 최대 5초 동안 PlayerObject가 생길 때까지 대기
+        float elapsed = 0f;
+        while (elapsed < 5f)
+        {
+            var playerObj = NetworkManager.Singleton.LocalClient?.PlayerObject;
+            if (playerObj != null)
+            {
+                // PlayerObject 준비 완료 → UI 활성화
+                if (lobbyUI.idInput != null) lobbyUI.idInput.interactable = true;
+                if (lobbyUI.pwInput != null) lobbyUI.pwInput.interactable = true;
+                if (lobbyUI.nickInput != null) lobbyUI.nickInput.interactable = true;
+                if (lobbyUI.loginBtn != null) lobbyUI.loginBtn.interactable = true;
+                if (lobbyUI.registerBtn != null) lobbyUI.registerBtn.interactable = true;
+                ShowMessage("서버에 접속했습니다. 로그인해주세요.", Color.yellow);
+                yield break;
+            }
+            elapsed += UnityEngine.Time.deltaTime;
+            yield return null;
+        }
+        // 5초 초과 시 연결 실패로 간주
+        ShowMessage("플레이어 초기화 오류. 재접속 해주세요.", Color.red);
+    }
+
+    private void OnClientDisconnected(ulong clientId)
+    {
+        // 내 클라이언트이거나 서버가 끊어졌을 때 (Timeout)
+        if (clientId == NetworkManager.Singleton.LocalClientId || clientId == 0)
+        {
+            if (lobbyUI.serverStatusText != null)
+            {
+                lobbyUI.serverStatusText.text = "🔴 오프라인";
+                lobbyUI.serverStatusText.color = Color.red;
+            }
+
+            if (lobbyUI.idInput != null) lobbyUI.idInput.interactable = false;
+            if (lobbyUI.pwInput != null) lobbyUI.pwInput.interactable = false;
+            if (lobbyUI.nickInput != null) lobbyUI.nickInput.interactable = false;
+            if (lobbyUI.loginBtn != null) lobbyUI.loginBtn.interactable = false;
+            if (lobbyUI.registerBtn != null) lobbyUI.registerBtn.interactable = false;
+
+            ShowMessage("서버 비활성화 또는 연결 실패", Color.red);
         }
     }
 
@@ -72,38 +176,51 @@ public class NetworkManagerUI : MonoBehaviour
             return;
         }
 
-        // 로그인 확인
-        var userData = CsvDatabase.Instance.LoginUser(id, pw);
+        var localPlayer = NetworkManager.Singleton.LocalClient?.PlayerObject;
+        if (localPlayer == null)
+        {
+            ShowMessage("아직 서버와 연결 중입니다. 잠시 후 다시 시도하세요.", Color.yellow);
+            return;
+        }
 
-        // 로그인 성공 처리
-        if (userData != null)
+        // PlayerState는 RPG_Systems 자식에 있으므로 GetComponentInChildren 사용
+        var pState = localPlayer.GetComponentInChildren<PlayerState>();
+        if (pState != null)
+        {
+            ShowMessage("로그인 요청 중...", Color.yellow);
+            pState.LoginRequestServerRpc(id, pw);
+        }
+        else
+        {
+            ShowMessage("플레이어 상태 오류. 재접속 해주세요.", Color.red);
+        }
+    }
+
+    public void OnLoginResponse(bool success, UserData userData, string msg)
+    {
+        if (success && userData != null)
         {
             LocalUserData.Current = userData;
             ShowMessage("로그인 성공!", Color.green);
             
-            // 로그인/가입창 가리기
             if (lobbyUI.authGroup != null) lobbyUI.authGroup.SetActive(false);
-            
-            // 닉네임 및 사용자 정보 띄우기
             if (lobbyUI.welcomeText != null)
             {
                 lobbyUI.welcomeText.gameObject.SetActive(true);
                 lobbyUI.welcomeText.text = $"[{userData.Nickname}]\n<size=20>{userData.ID}</size>";
             }
 
-            // 시작 / 내정보 버튼 활성화
             if (lobbyUI.startClientBtn != null) lobbyUI.startClientBtn.interactable = true;
             if (lobbyUI.myInfoBtn != null) lobbyUI.myInfoBtn.interactable = true;
         }
         else
         {
-            ShowMessage("ID 또는 PW가 일치하지 않습니다.", Color.red);
+            ShowMessage(msg, Color.red);
         }
     }
 
     public void OnRegisterClicked()
     {
-        // 1. 닉네임 칸이 숨겨져 있다면 보여주고 안내 메시지 띄움
         if (lobbyUI.nickInput != null && !lobbyUI.nickInput.transform.parent.gameObject.activeSelf)
         {
             lobbyUI.nickInput.transform.parent.gameObject.SetActive(true);
@@ -111,7 +228,6 @@ public class NetworkManagerUI : MonoBehaviour
             return;
         }
 
-        // 2. 닉네임 칸이 켜진 상태에서 가입 시도
         string id = lobbyUI.idInput != null ? lobbyUI.idInput.text : "";
         string pw = lobbyUI.pwInput != null ? lobbyUI.pwInput.text : "";
         string nick = lobbyUI.nickInput != null ? lobbyUI.nickInput.text : "";
@@ -122,19 +238,32 @@ public class NetworkManagerUI : MonoBehaviour
             return;
         }
 
-        if (CsvDatabase.Instance.RegisterUser(id, pw, nick))
+        var localPlayer = NetworkManager.Singleton.LocalClient?.PlayerObject;
+        if (localPlayer != null)
         {
-            ShowMessage("회원가입 완료! 로그인 버튼을 눌러주세요.", Color.green);
-            // 가입 완료 후 다시 닉네임 입력칸 숨기기 (선택적 편의 기능)
+            // PlayerState는 RPG_Systems 자식에 있으므로 GetComponentInChildren 사용
+            var pState = localPlayer.GetComponentInChildren<PlayerState>();
+            if (pState != null)
+            {
+                pState.RegisterRequestServerRpc(id, pw, nick);
+            }
+        }
+    }
+
+    public void OnRegisterResponse(bool success, string msg)
+    {
+        if (success)
+        {
+            ShowMessage(msg, Color.green);
             if (lobbyUI.nickInput != null) lobbyUI.nickInput.transform.parent.gameObject.SetActive(false);
         }
         else
         {
-            ShowMessage("이미 존재하는 ID입니다.", Color.red);
+            ShowMessage(msg, Color.red);
         }
     }
 
-    private void ShowMessage(string msg, Color? color = null)
+    public void ShowMessage(string msg, Color? color = null)
     {
         if (lobbyUI != null && lobbyUI.messageText != null)
         {
@@ -180,18 +309,18 @@ public class NetworkManagerUI : MonoBehaviour
         HideCanvas();
     }
 
-    public void OnStartClientClicked()
+    public void OnEnterGameClicked()
     {
-        if (NetworkManager.Singleton.IsClient || NetworkManager.Singleton.IsServer) return;
-        
-        var transport = NetworkManager.Singleton.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>();
-        if (transport != null)
+        var localPlayer = NetworkManager.Singleton.LocalClient?.PlayerObject;
+        if (localPlayer != null)
         {
-            string targetIp = (lobbyUI.ipInput != null && !string.IsNullOrEmpty(lobbyUI.ipInput.text)) ? lobbyUI.ipInput.text.Trim() : "127.0.0.1";
-            transport.SetConnectionData(targetIp, 7777); 
+            // PlayerState는 RPG_Systems 자식에 있으므로 GetComponentInChildren 사용
+            var pState = localPlayer.GetComponentInChildren<PlayerState>();
+            if (pState != null)
+            {
+                pState.RequestEnterGameServerRpc();
+            }
         }
-        
-        NetworkManager.Singleton.StartClient();
         HideCanvas();
     }
 
