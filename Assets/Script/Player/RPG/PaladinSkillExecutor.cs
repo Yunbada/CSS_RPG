@@ -2,34 +2,11 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
+public class PaladinSkillExecutor : BaseSkillExecutor
 {
-    private CombatSystem combatSystem;
-    private PlayerState playerState;
-    private PlayerHealth playerHealth;
-    private PlayerVFXController playerVfx;
-    private CharacterController charCtrl;
-    private Camera playerCamera;
-    private StatSystem statSystem;
-
     // 축복의 방패 에너지
     public int ShieldEnergy { get; private set; } = 0;
     private const int MAX_ENERGY = 100;
-
-    public void Initialize(CombatSystem combat, PlayerState state, PlayerHealth health)
-    {
-        combatSystem = combat;
-        playerState = state;
-        playerHealth = health;
-        playerVfx = GetComponent<PlayerVFXController>();
-        charCtrl = GetComponentInParent<CharacterController>();
-        var pm = GetComponentInParent<PlayerMovement>();
-        if (pm != null) playerCamera = pm.GetComponentInChildren<Camera>(true);
-        statSystem = GetComponentInParent<StatSystem>();
-
-        transform.localPosition = Vector3.zero;
-        transform.localRotation = Quaternion.identity;
-    }
 
     public void AddShieldEnergy(int amount)
     {
@@ -42,7 +19,7 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
         ShieldEnergy = 0;
     }
 
-    public void ExecuteSkill(int skillIndex, SkillData skill)
+    public override void ExecuteSkill(int skillIndex, SkillData skill)
     {
         switch (skillIndex)
         {
@@ -56,17 +33,6 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
             case 7: StartCoroutine(Skill_IndomitableWill(skill)); break;
             case 8: StartCoroutine(Skill_ApostleOfLight(skill)); break;
         }
-    }
-
-    private void SetInvincible(bool value)
-    {
-        if (combatSystem != null) combatSystem.ChangeState(value ? CombatState.SkillExecuting : CombatState.Idle);
-        if (playerHealth != null) playerHealth.SetInvincibleServerRpc(value);
-    }
-
-    private void SpawnVFX(int vfxType, Vector3 position, Quaternion rotation)
-    {
-        if (playerVfx != null) playerVfx.SpawnSkillVFXServerRpc(vfxType, position, rotation);
     }
 
     // =========================================================================
@@ -95,19 +61,16 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
         // 전방 타격 및 넉백
         Vector3 hitCenter = root.position + root.forward * 1.5f;
         CombatSystem.DrawDebugSphere(hitCenter, 2f, 0.8f, new Color(1f, 0.5f, 0f, 0.2f));
-        Collider[] hits = Physics.OverlapSphere(hitCenter, 2f);
-        foreach (var col in hits)
+        
+        var targets = GetEnemiesInSphere(hitCenter, 2f);
+        foreach (var target in targets)
         {
-            var target = CombatSystem.FindDamageable(col.gameObject);
-            if (target != null && (Object)target != (Object)playerHealth && playerState.IsEnemy(target.CurrentTeam))
+            combatSystem.DealDamageToTarget(target, skill.damageMultiplier, skill.skillName, target.EntityTransform.position);
+            if (target is PlayerHealth pH)
             {
-                combatSystem.DealDamageToTarget(target, skill.damageMultiplier, skill.skillName, col.ClosestPoint(hitCenter));
-                if (target is PlayerHealth pH)
-                {
-                    Vector3 pushDir = (pH.EntityTransform.position - root.position).normalized;
-                    pushDir.y = 0;
-                    pH.KnockUpServerRpc(pushDir * 5f, 0.3f);
-                }
+                Vector3 pushDir = (pH.EntityTransform.position - root.position).normalized;
+                pushDir.y = 0;
+                pH.KnockUpServerRpc(pushDir * 5f, 0.3f);
             }
         }
 
@@ -165,19 +128,25 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
             // 무한사거리 Raycast로 투척 충돌 판정
             Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
             var hits = Physics.SphereCastAll(ray, 1.5f, 100f);
+            
+            var damagedTargets = new List<IDamageable>();
             foreach (var hit in hits)
             {
                 var target = CombatSystem.FindDamageable(hit.collider.gameObject);
                 if (target != null && (Object)target != (Object)playerHealth && playerState.IsEnemy(target.CurrentTeam))
                 {
-                    combatSystem.DealDamageToTarget(target, skill.damageMultiplier, "축복의 방패(투척)");
-                    // 100이면 장시간 스턴
-                    float stunDur = usedEnergy == 100 ? 5.0f : 2.0f;
-                    if (target is PlayerHealth pH)
+                    if (!damagedTargets.Contains(target))
                     {
-                        pH.KnockUpServerRpc(root.forward * 5f, 0.2f); // 넉백
-                        // 스턴
-                        pH.KnockUpServerRpc(Vector3.zero, stunDur); 
+                        combatSystem.DealDamageToTarget(target, skill.damageMultiplier, "축복의 방패(투척)");
+                        // 100이면 장시간 스턴
+                        float stunDur = usedEnergy == 100 ? 5.0f : 2.0f;
+                        if (target is PlayerHealth pH)
+                        {
+                            pH.KnockUpServerRpc(root.forward * 5f, 0.2f); // 넉백
+                            // 스턴
+                            pH.KnockUpServerRpc(Vector3.zero, stunDur); 
+                        }
+                        damagedTargets.Add(target);
                     }
                 }
             }
@@ -302,17 +271,22 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
         Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
         SpawnVFX(5, ray.origin + ray.direction * 2f, root.rotation);
 
+        var damagedTargets = new List<IDamageable>();
         var hits = Physics.SphereCastAll(ray, 1.5f, 100f);
         foreach (var hit in hits)
         {
             var target = CombatSystem.FindDamageable(hit.collider.gameObject);
             if (target != null && (Object)target != (Object)playerHealth && playerState.IsEnemy(target.CurrentTeam))
             {
-                combatSystem.DealDamageToTarget(target, skill.damageMultiplier, skill.skillName);
-                var pmInfo = target.EntityTransform.GetComponent<PlayerMovement>();
-                if (pmInfo != null)
+                if (!damagedTargets.Contains(target))
                 {
-                    pmInfo.ApplySlowClientRpc(0.5f, 3.0f); // 3초간 50% 이속 감소
+                    combatSystem.DealDamageToTarget(target, skill.damageMultiplier, skill.skillName);
+                    var pmInfo = target.EntityTransform.GetComponent<PlayerMovement>();
+                    if (pmInfo != null)
+                    {
+                        pmInfo.ApplySlowClientRpc(0.5f, 3.0f); // 3초간 50% 이속 감소
+                    }
+                    damagedTargets.Add(target);
                 }
             }
         }
@@ -439,23 +413,5 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
         }
 
         SetInvincible(false);
-    }
-
-    // =========================================================================
-    // 헬퍼: 반경 내 적 색출
-    // =========================================================================
-    private List<IDamageable> GetEnemiesInSphere(Vector3 center, float radius)
-    {
-        List<IDamageable> result = new List<IDamageable>();
-        Collider[] hits = Physics.OverlapSphere(center, radius);
-        foreach (var col in hits)
-        {
-            var target = CombatSystem.FindDamageable(col.gameObject);
-            if (target != null && (Object)target != (Object)playerHealth && playerState.IsEnemy(target.CurrentTeam))
-            {
-                if (!result.Contains(target)) result.Add(target);
-            }
-        }
-        return result;
     }
 }

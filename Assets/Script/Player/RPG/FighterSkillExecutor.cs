@@ -7,39 +7,13 @@ using System.Collections;
 /// CombatSystem.ExecuteSkillAttack()에서 무투가 전용 스킬일 때 이 클래스로 위임합니다.
 /// 각 스킬은 코루틴으로 이동/타격을 시간에 걸쳐 수행합니다.
 /// </summary>
-public class FighterSkillExecutor : MonoBehaviour, ISkillExecutor
+public class FighterSkillExecutor : BaseSkillExecutor
 {
-    private CombatSystem combatSystem;
-    private PlayerState playerState;
-    private PlayerHealth playerHealth;
-    private PlayerVFXController playerVfx;
-    private CharacterController charCtrl;
-    private Camera playerCamera;
-
-    public void Initialize(CombatSystem combat, PlayerState state, PlayerHealth health)
-    {
-        combatSystem = combat;
-        playerState = state;
-        playerHealth = health;
-        playerVfx = GetComponent<PlayerVFXController>();
-        charCtrl = GetComponentInParent<CharacterController>();
-        
-        var movement = GetComponentInParent<PlayerMovement>();
-        if (movement != null)
-        {
-            playerCamera = movement.GetComponentInChildren<Camera>(true);
-        }
-
-        // 혹시라도 자식 객체가 루트에서 분리된 채 저장/동기화됐을 경우를 대비하여 원점 복귀
-        transform.localPosition = Vector3.zero;
-        transform.localRotation = Quaternion.identity;
-    }
-
     // =========================================================================
     // 스킬 실행 및 FSM 상태 연동
     // =========================================================================
 
-    public void ExecuteSkill(int skillIndex, SkillData skill)
+    public override void ExecuteSkill(int skillIndex, SkillData skill)
     {
         switch (skillIndex)
         {
@@ -52,25 +26,6 @@ public class FighterSkillExecutor : MonoBehaviour, ISkillExecutor
             case 6: Skill_BunGaeChum(); break;
             case 7: Skill_YeonTan(); break;
             case 8: Skill_JinGongNanMu(); break;
-        }
-    }
-
-    private void SetInvincible(bool value)
-    {
-        if (combatSystem != null)
-        {
-            combatSystem.ChangeState(value ? CombatState.SkillExecuting : CombatState.Idle);
-        }
-
-        if (playerHealth != null)
-            playerHealth.SetInvincibleServerRpc(value);
-    }
-
-    private void SpawnVFX(int vfxType, Vector3 position, Quaternion rotation)
-    {
-        if (playerVfx != null)
-        {
-            playerVfx.SpawnSkillVFXServerRpc(vfxType, position, rotation);
         }
     }
 
@@ -305,16 +260,7 @@ public class FighterSkillExecutor : MonoBehaviour, ISkillExecutor
             if (tickTimer >= tickInterval)
             {
                 // 주변 5m 범위 내의 적 찾기
-                Collider[] hits = Physics.OverlapSphere(rootTransform.position, 5f);
-                System.Collections.Generic.List<IDamageable> targets = new System.Collections.Generic.List<IDamageable>();
-                foreach (var col in hits)
-                {
-                    var target = CombatSystem.FindDamageable(col.gameObject);
-                    if (target != null && (Object)target != (Object)playerHealth && playerState.IsEnemy(target.CurrentTeam))
-                    {
-                        targets.Add(target);
-                    }
-                }
+                var targets = GetEnemiesInSphere(rootTransform.position, 5f);
 
                 if (targets.Count > 0)
                 {
@@ -415,26 +361,22 @@ public class FighterSkillExecutor : MonoBehaviour, ISkillExecutor
                 SpawnVFX(2, rootTransform.position + Vector3.up * 0.5f, Quaternion.identity);
                 
                 // 주변 5m 적 검색 및 끌어당기기
-                Collider[] hits = Physics.OverlapSphere(rootTransform.position, 5f);
-                foreach (var col in hits)
+                var targets = GetEnemiesInSphere(rootTransform.position, 5f);
+                foreach (var target in targets)
                 {
-                    var target = CombatSystem.FindDamageable(col.gameObject);
-                    if (target != null && (Object)target != (Object)playerHealth && target.CurrentTeam != playerState.currentTeam.Value)
+                    // 플레이어 방향으로 끌어당기는 벡터 계산
+                    Vector3 pullDir = (rootTransform.position - target.EntityTransform.position).normalized;
+                    // y축(위아래)은 유지
+                    pullDir.y = 0; 
+                    
+                    // 넉업 함수를 재활용하여 강제 이동(끌어당기기) 적용
+                    if (target is PlayerHealth pTargetP) pTargetP.KnockUpServerRpc(pullDir * 6f, tickInterval);
+                    
+                    // 틱 데미지
+                    if (combatSystem != null)
                     {
-                        // 플레이어 방향으로 끌어당기는 벡터 계산
-                        Vector3 pullDir = (rootTransform.position - target.EntityTransform.position).normalized;
-                        // y축(위아래)은 유지
-                        pullDir.y = 0; 
-                        
-                        // 넉업 함수를 재활용하여 강제 이동(끌어당기기) 적용
-                        if (target is PlayerHealth pTargetP) pTargetP.KnockUpServerRpc(pullDir * 6f, tickInterval);
-                        
-                        // 틱 데미지
-                        if (combatSystem != null)
-                        {
-                            // 당겨지는 대상의 몸통 부분을 타격 지점으로 전달
-                            combatSystem.DealDamageToTarget(target, 0.3f, "진공난무(흡인)", col.ClosestPoint(rootTransform.position));
-                        }
+                        // 당겨지는 대상의 몸통 부분을 타격 지점으로 전달
+                        combatSystem.DealDamageToTarget(target, 0.3f, "진공난무(흡인)", target.EntityTransform.position);
                     }
                 }
                 tickTimer = 0f;
@@ -448,91 +390,5 @@ public class FighterSkillExecutor : MonoBehaviour, ISkillExecutor
         Debug.Log("진공난무 최종 타격!");
         SetInvincible(false);
     }
-
-    // =========================================================================
-    // 공용 공격 유틸리티
-    // =========================================================================
-    private System.Collections.Generic.List<IDamageable> RaycastAttack(float reqRange, float multiplier, string skillName)
-    {
-        var damagedTargets = new System.Collections.Generic.List<IDamageable>();
-        if (playerCamera == null) return damagedTargets;
-
-        float range = reqRange + 1f; // 전체적으로 범위 1m 증가
-        Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
-        
-        // 시각적 디버그 표시 (1초 유지)
-        StartCoroutine(DrawDebugLineCoroutine(ray.origin, ray.origin + ray.direction * range, Color.red, 1f));
-
-        var hits = Physics.SphereCastAll(ray, 1.5f, range); // 범위 1.5m로 늘리고 다중타겟 활성화
-        foreach (var hit in hits)
-        {
-            var target = CombatSystem.FindDamageable(hit.collider.gameObject);
-            if (target != null && (Object)target != (Object)playerHealth && playerState.IsEnemy(target.CurrentTeam))
-            {
-                if (!damagedTargets.Contains(target) && combatSystem != null)
-                {
-                    combatSystem.DealDamageToTarget(target, multiplier, skillName, hit.point);
-                    damagedTargets.Add(target); // 타겟 전체 공격
-                }
-            }
-        }
-        return damagedTargets;
-    }
-
-    private void AreaAttack(Vector3 center, float reqRadius, float multiplier, string skillName)
-    {
-        float radius = reqRadius + 1f; // 전체적으로 범위 1m 증가
-        // 시각적 디버그 구형 표시 (1초 유지)
-        StartCoroutine(DrawDebugSphereCoroutine(center, radius, Color.red, 1f));
-
-        Collider[] hits = Physics.OverlapSphere(center, radius);
-        foreach (var col in hits)
-        {
-            var target = CombatSystem.FindDamageable(col.gameObject);
-            if (target != null && (Object)target != (Object)playerHealth && playerState.IsEnemy(target.CurrentTeam))
-            {
-                if (combatSystem != null)
-                {
-                    combatSystem.DealDamageToTarget(target, multiplier, skillName, col.ClosestPoint(center));
-                }
-            }
-        }
-    }
-
-    // =========================================================================
-    // 시각적 공격 범위 표시 헬퍼 (테스트용)
-    // =========================================================================
-    private IEnumerator DrawDebugLineCoroutine(Vector3 start, Vector3 end, Color color, float duration)
-    {
-        GameObject lineObj = new GameObject("DebugAttackLine");
-        LineRenderer lr = lineObj.AddComponent<LineRenderer>();
-        lr.startWidth = 0.05f;
-        lr.endWidth = 0.05f;
-        lr.SetPositions(new Vector3[] { start, end });
-        
-        // URP 및 기본 빌트인 모두 작동하는 기본 스프라이트 셰이더
-        var mat = new Material(Shader.Find("Sprites/Default"));
-        lr.material = mat;
-        lr.startColor = color;
-        lr.endColor = color;
-        
-        yield return new WaitForSeconds(duration);
-        Destroy(lineObj);
-    }
-
-    private IEnumerator DrawDebugSphereCoroutine(Vector3 center, float radius, Color color, float duration)
-    {
-        GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        Destroy(sphere.GetComponent<Collider>()); // 물리 충돌 방지
-        sphere.transform.position = center;
-        sphere.transform.localScale = new Vector3(radius * 2, radius * 2, radius * 2);
-        
-        Renderer rend = sphere.GetComponent<Renderer>();
-        var mat = new Material(Shader.Find("Sprites/Default"));
-        mat.color = new Color(color.r, color.g, color.b, 0.4f); // 반투명
-        rend.material = mat;
-        
-        yield return new WaitForSeconds(duration);
-        Destroy(sphere);
-    }
 }
+

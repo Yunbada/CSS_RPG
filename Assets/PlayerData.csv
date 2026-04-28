@@ -1,3 +1,4 @@
 ﻿PersonalCode,ID,Password,Level,Exp,ClassIndex,Leather,Tooth,Skull,Gold,InventoryData,EquipmentData,Nickname
-CODE-0001,asd,asd,100,11,5,1,0,0,30,2003:1,,asd
+CODE-0001,asd,asd,1,6,1,1,0,0,30,2003:1,,asd
 CODE-0002,asdfg,asdfg,1,0,0,0,0,0,0,,,asdfg
+CODE-0003,asdf,asdf,100,0,5,0,0,0,0,2004:1,,asdf

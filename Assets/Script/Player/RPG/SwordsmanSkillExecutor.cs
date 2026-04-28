@@ -4,33 +4,11 @@ using UnityEngine;
 
 /// <summary>
 /// 검사(Swordsman) 클래스의 스킬 실행기
-/// ISkillExecutor를 상속받아 OCP와 다형성을 유지합니다.
+/// BaseSkillExecutor를 상속받아 OCP와 다형성을 유지합니다.
 /// </summary>
-public class SwordsmanSkillExecutor : MonoBehaviour, ISkillExecutor
+public class SwordsmanSkillExecutor : BaseSkillExecutor
 {
-    private CombatSystem combatSystem;
-    private PlayerState playerState;
-    private PlayerHealth playerHealth;
-    private PlayerVFXController playerVfx;
-    private Camera playerCamera;
-
-    private CharacterController charCtrl;
-
-    public void Initialize(CombatSystem combat, PlayerState state, PlayerHealth health)
-    {
-        combatSystem = combat;
-        playerState = state;
-        playerHealth = health;
-        playerVfx = GetComponent<PlayerVFXController>();
-        charCtrl = GetComponentInParent<CharacterController>();
-        var pm = GetComponentInParent<PlayerMovement>();
-        if (pm != null) playerCamera = pm.GetComponentInChildren<Camera>(true);
-
-        transform.localPosition = Vector3.zero;
-        transform.localRotation = Quaternion.identity;
-    }
-
-    public void ExecuteSkill(int skillIndex, SkillData skill)
+    public override void ExecuteSkill(int skillIndex, SkillData skill)
     {
         if (skillIndex == 10) StartCoroutine(DrawSwordCoroutine(skill));      // 발도술
         else if (skillIndex == 11) StartCoroutine(SpinSlashCoroutine(skill)); // 회전 베기
@@ -52,8 +30,8 @@ public class SwordsmanSkillExecutor : MonoBehaviour, ISkillExecutor
 
         if (combatSystem != null) combatSystem.ChangeState(CombatState.SkillExecuting);
 
-        // 일직선 데미지 판정
-        RaycastAttack(5f, skill.damageMultiplier, skill.skillName);
+        // 일직선 데미지 판정 (1명만 타격)
+        RaycastAttack(5f, skill.damageMultiplier, skill.skillName, 1);
 
         // 후딜레이
         yield return new WaitForSeconds(0.2f);
@@ -68,7 +46,7 @@ public class SwordsmanSkillExecutor : MonoBehaviour, ISkillExecutor
     {
         if (combatSystem != null) combatSystem.ChangeState(CombatState.SkillExecuting);
         
-        // 주변 3.5m 범위 판정 및 이펙트 소환 (PlayerState.Rpc 사용 권장)
+        // 주변 3.5m 범위 판정 및 이펙트 소환
         Transform rootTransform = charCtrl != null ? charCtrl.transform : playerState.transform;
         AreaAttack(rootTransform.position, 3.5f, skill.damageMultiplier, skill.skillName);
 
@@ -76,44 +54,5 @@ public class SwordsmanSkillExecutor : MonoBehaviour, ISkillExecutor
         
         if (combatSystem != null && combatSystem.CurrentState == CombatState.SkillExecuting)
             combatSystem.ChangeState(CombatState.Idle);
-    }
-
-    // =========================================================================
-    // 공용 공격 유틸리티 (FighterSkillExecutor와 동일)
-    // =========================================================================
-    private void RaycastAttack(float reqRange, float multiplier, string skillName)
-    {
-        if (playerCamera == null) return;
-
-        Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
-        var hits = Physics.SphereCastAll(ray, 1.0f, reqRange);
-        foreach (var hit in hits)
-        {
-            var target = CombatSystem.FindDamageable(hit.collider.gameObject);
-            if (target != null && (Object)target != (Object)playerHealth && playerState.IsEnemy(target.CurrentTeam))
-            {
-                if (combatSystem != null)
-                {
-                    combatSystem.DealDamageToTarget(target, multiplier, skillName, hit.point);
-                    return; // 관통 불가능 (1명만 타격)
-                }
-            }
-        }
-    }
-
-    private void AreaAttack(Vector3 center, float reqRadius, float multiplier, string skillName)
-    {
-        Collider[] hits = Physics.OverlapSphere(center, reqRadius);
-        foreach (var col in hits)
-        {
-            var target = CombatSystem.FindDamageable(col.gameObject);
-            if (target != null && (Object)target != (Object)playerHealth && playerState.IsEnemy(target.CurrentTeam))
-            {
-                if (combatSystem != null)
-                {
-                    combatSystem.DealDamageToTarget(target, multiplier, skillName, col.ClosestPoint(center));
-                }
-            }
-        }
     }
 }

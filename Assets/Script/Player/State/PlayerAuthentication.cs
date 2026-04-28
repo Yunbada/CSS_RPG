@@ -31,9 +31,24 @@ public class PlayerAuthentication : NetworkBehaviour
         isEnteredGame.OnValueChanged += OnEnteredGameChanged;
 
         // 즉시 격리/활성화 상태 적용
-        if (lifecycleManager != null)
+        if (!isEnteredGame.Value)
         {
-            lifecycleManager.SetPlayerActiveState(isEnteredGame.Value);
+            // 아직 게임 입장 전이라면 대기실(-1000)로 강제 이동
+            var root = transform.root;
+            var cc = root.GetComponent<CharacterController>();
+            if (cc != null) cc.enabled = false;
+            
+            root.position = new Vector3(0, -1000, 0);
+            
+            if (cc != null) cc.enabled = true;
+            
+            if (lifecycleManager != null)
+                lifecycleManager.SetPlayerActiveState(false);
+        }
+        else
+        {
+            if (lifecycleManager != null)
+                lifecycleManager.SetPlayerActiveState(true);
         }
     }
 
@@ -143,7 +158,13 @@ public class PlayerAuthentication : NetworkBehaviour
     [Rpc(SendTo.Owner)]
     public void EnterGameClientRpc(Vector3 pos)
     {
-        transform.position = pos;
+        var root = transform.root;
+        var cc = root.GetComponent<CharacterController>();
+        if (cc != null) cc.enabled = false;
+        
+        root.position = pos;
+        
+        if (cc != null) cc.enabled = true;
         
         if (lifecycleManager != null)
         {

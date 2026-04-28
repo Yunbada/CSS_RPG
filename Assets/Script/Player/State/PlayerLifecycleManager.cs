@@ -58,7 +58,7 @@ public class PlayerLifecycleManager : NetworkBehaviour
         if (pCam != null) pCam.enabled = active;
         
         // HUD 토글 (이벤트 기반 리팩토링 대상)
-        var hud = FindFirstObjectByType<UIGameHUDRuntime>();
+        var hud = FindFirstObjectByType<UIGameHUDRuntime>(FindObjectsInactive.Include);
         if (hud != null)
         {
             hud.gameObject.SetActive(active);

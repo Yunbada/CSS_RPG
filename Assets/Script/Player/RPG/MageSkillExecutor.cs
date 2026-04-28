@@ -4,33 +4,11 @@ using UnityEngine;
 
 /// <summary>
 /// 마법사(Mage) 클래스의 스킬 실행기
-/// ISkillExecutor를 상속받아 OCP와 다형성을 유지합니다.
+/// BaseSkillExecutor를 상속받아 OCP와 다형성을 유지합니다.
 /// </summary>
-public class MageSkillExecutor : MonoBehaviour, ISkillExecutor
+public class MageSkillExecutor : BaseSkillExecutor
 {
-    private CombatSystem combatSystem;
-    private PlayerState playerState;
-    private PlayerHealth playerHealth;
-    private PlayerVFXController playerVfx;
-    private Camera playerCamera;
-
-    private CharacterController charCtrl;
-
-    public void Initialize(CombatSystem combat, PlayerState state, PlayerHealth health)
-    {
-        combatSystem = combat;
-        playerState = state;
-        playerHealth = health;
-        playerVfx = GetComponent<PlayerVFXController>();
-        charCtrl = GetComponentInParent<CharacterController>();
-        var pm = GetComponentInParent<PlayerMovement>();
-        if (pm != null) playerCamera = pm.GetComponentInChildren<Camera>(true);
-
-        transform.localPosition = Vector3.zero;
-        transform.localRotation = Quaternion.identity;
-    }
-
-    public void ExecuteSkill(int skillIndex, SkillData skill)
+    public override void ExecuteSkill(int skillIndex, SkillData skill)
     {
         if (skillIndex == 20) StartCoroutine(FireballCoroutine(skill));    // 파이어볼
         else if (skillIndex == 21) StartCoroutine(BlizzardCoroutine(skill)); // 블리자드
@@ -93,24 +71,5 @@ public class MageSkillExecutor : MonoBehaviour, ISkillExecutor
 
         if (combatSystem != null && combatSystem.CurrentState == CombatState.SkillExecuting)
             combatSystem.ChangeState(CombatState.Idle);
-    }
-
-    // =========================================================================
-    // 공용 공격 유틸리티 
-    // =========================================================================
-    private void AreaAttack(Vector3 center, float reqRadius, float multiplier, string skillName)
-    {
-        Collider[] hits = Physics.OverlapSphere(center, reqRadius);
-        foreach (var col in hits)
-        {
-            var target = CombatSystem.FindDamageable(col.gameObject);
-            if (target != null && (Object)target != (Object)playerHealth && playerState.IsEnemy(target.CurrentTeam))
-            {
-                if (combatSystem != null)
-                {
-                    combatSystem.DealDamageToTarget(target, multiplier, skillName, col.ClosestPoint(center));
-                }
-            }
-        }
     }
 }

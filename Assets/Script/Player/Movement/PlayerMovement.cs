@@ -25,37 +25,78 @@ public class PlayerMovement : NetworkBehaviour
     private CombatSystem combatSystem;
 
     private PlayerAuthentication _playerAuth;
+    private Transform cachedModel;
+    private Transform cachedRpgSys;
+
+    // 슬로우 관리
+    private struct SlowData { public float ratio; public float endTime; }
+    private System.Collections.Generic.List<SlowData> activeSlows = new System.Collections.Generic.List<SlowData>();
 
     private void Awake()
     {
         inputHandle = GetComponent<InputHandle>();
         characterController = GetComponent<CharacterController>();
-        combatSystem = GetComponent<CombatSystem>();
+        combatSystem = GetComponentInChildren<CombatSystem>();
         _playerAuth = GetComponentInChildren<PlayerAuthentication>();
+        
+        cachedModel = transform.Find("PlayerModel");
+        cachedRpgSys = transform.Find("RPG_Systems");
     }
 
     private void Update()
     {
-        // (버그 수정) Host/Client 무관하게 PlayerModel과 RPG_Systems가 루트에서 이탈하지 않도록 강제 동기화
-        Transform model = transform.Find("PlayerModel");
-        if (model != null) model.localPosition = Vector3.zero;
-
-        Transform rpgSys = transform.Find("RPG_Systems");
-        if (rpgSys != null) rpgSys.localPosition = Vector3.zero;
+        // 최적화: 캐싱된 트랜스폼 사용
+        if (cachedModel != null) cachedModel.localPosition = Vector3.zero;
+        if (cachedRpgSys != null) cachedRpgSys.localPosition = Vector3.zero;
 
         if (!IsOwner) return;
 
-        // ★ 핵심: 게임 미입장(격리) 중에는 이동 처리하지 않음
+        // 지연 할당 대비
         if (_playerAuth == null) _playerAuth = GetComponentInChildren<PlayerAuthentication>();
-        if (_playerAuth != null && !_playerAuth.isEnteredGame.Value) return;
+        if (combatSystem == null) combatSystem = GetComponentInChildren<CombatSystem>();
 
-        if (combatSystem == null)
-            combatSystem = GetComponentInChildren<CombatSystem>();
+        // ★ 핵심: 게임 미입장(격리) 중에는 이동 및 중력 완전 차단
+        if (_playerAuth != null && !_playerAuth.isEnteredGame.Value)
+        {
+            velocity = Vector3.zero;
+            return;
+        }
+
+        UpdateSlowEffects();
 
         // 스킬 사용 중이거나 강제 이동 중이면 일반 이동 불가
         if ((combatSystem != null && combatSystem.IsUsingSkill) || isForcedMoving) return;
 
         HandleMovement();
+    }
+
+    private void UpdateSlowEffects()
+    {
+        if (activeSlows.Count == 0)
+        {
+            currentSlowMultiplier = 1.0f;
+            return;
+        }
+
+        float currentTime = Time.time;
+        float maxSlowRatio = 0f;
+
+        for (int i = activeSlows.Count - 1; i >= 0; i--)
+        {
+            if (currentTime >= activeSlows[i].endTime)
+            {
+                activeSlows.RemoveAt(i);
+            }
+            else
+            {
+                if (activeSlows[i].ratio > maxSlowRatio)
+                {
+                    maxSlowRatio = activeSlows[i].ratio;
+                }
+            }
+        }
+
+        currentSlowMultiplier = 1.0f - maxSlowRatio;
     }
 
     // =========================================================================
@@ -124,18 +165,6 @@ public class PlayerMovement : NetworkBehaviour
     public void ApplySlowClientRpc(float slowRatio, float duration)
     {
         if (!IsOwner) return;
-        StartCoroutine(SlowCoroutine(slowRatio, duration));
-    }
-
-    private System.Collections.IEnumerator SlowCoroutine(float slowRatio, float duration)
-    {
-        // 중복 슬로우인 경우 가장 강한 비율 적용 (임시 정책)
-        if (currentSlowMultiplier > 1f - slowRatio) 
-            currentSlowMultiplier = 1f - slowRatio;
-
-        yield return new WaitForSeconds(duration);
-
-        // 지속시간 뒤 원상 복구
-        currentSlowMultiplier = 1.0f;
+        activeSlows.Add(new SlowData { ratio = slowRatio, endTime = Time.time + duration });
     }
 }
