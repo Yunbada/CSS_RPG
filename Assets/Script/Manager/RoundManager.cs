@@ -75,7 +75,8 @@ public class RoundManager : NetworkBehaviour
             if (IsServer)
             {
                 player.currentTeam.Value = Team.Human;
-                player.isInvincible.Value = true; // 관전 상태에서는 무적
+                var pH = player.GetComponent<PlayerHealth>();
+                if (pH != null) pH.isInvincible.Value = true;
                 SetPlayerSpectatorClientRpc(player.OwnerClientId, true);
             }
         }
@@ -107,10 +108,14 @@ public class RoundManager : NetworkBehaviour
             if (p == null) continue;
             p.currentTeam.Value = Team.Human;
             p.currentZombieType.Value = ZombieType.None;
-            p.maxHealth.Value = 100;
-            p.currentHealth.Value = 100;
-            p.isInvincible.Value = false;
-            p.ResetRoundCounters();
+            var pH = p.GetComponent<PlayerHealth>();
+            if (pH != null)
+            {
+                pH.maxHealth.Value = 100;
+                pH.currentHealth.Value = 100;
+                pH.isInvincible.Value = false;
+                pH.ResetRoundCounters();
+            }
 
             // CombatSystem 데미지 카운터 리셋
             var combat = p.GetComponentInChildren<CombatSystem>();
@@ -194,7 +199,9 @@ public class RoundManager : NetworkBehaviour
             var paladin = target.GetComponentInChildren<PaladinSkillExecutor>();
             if (paladin != null) paladin.ResetShieldEnergy();
 
-            string nick = target.Nickname.Value.ToString();
+            string nick = "";
+                var pAuth = target.GetComponent<PlayerAuthentication>();
+                if (pAuth != null) nick = pAuth.Nickname.Value.ToString();
             Debug.Log($"[Infection] {nick}이(가) 숙주 좀비로 감염!");
         }
         
@@ -258,19 +265,19 @@ public class RoundManager : NetworkBehaviour
         {
             if (p == null) continue;
 
+            var pH = p.GetComponent<PlayerHealth>();
+            var pAuth = p.GetComponent<PlayerAuthentication>();
             var pExp = p.GetComponentInChildren<PlayerExperience>();
             int totalExpReward = 0;
             int totalGoldReward = 0;
 
-            // ---------------------------------------------------------------
-            // (1) DMG의 1% → EXP (모든 플레이어)
-            // ---------------------------------------------------------------
-            int serverDmg = p.totalDamageDealt.Value;
+            // (1) DMG의 1% → EXP
+            int serverDmg = pH != null ? pH.totalDamageDealt.Value : 0;
             if (serverDmg > 0)
             {
                 int dmgExp = Mathf.Max(1, Mathf.FloorToInt(serverDmg * DMG_TO_EXP_RATE));
                 totalExpReward += dmgExp;
-                Debug.Log($"  [{p.Nickname.Value}] DMG:{serverDmg} → EXP +{dmgExp}");
+                Debug.Log($"  [{(pAuth != null ? pAuth.Nickname.Value : "?")}] DMG:{serverDmg} → EXP +{dmgExp}");
             }
 
             // ---------------------------------------------------------------
@@ -280,27 +287,27 @@ public class RoundManager : NetworkBehaviour
             {
                 totalExpReward += HUMAN_SURVIVAL_EXP;
                 totalGoldReward += HUMAN_SURVIVAL_GOLD;
-                Debug.Log($"  [{p.Nickname.Value}] 생존 보너스: EXP +{HUMAN_SURVIVAL_EXP}, Gold +{HUMAN_SURVIVAL_GOLD}");
+                Debug.Log($"  [{(pAuth != null ? pAuth.Nickname.Value : "?")}] 생존 보너스: EXP +{HUMAN_SURVIVAL_EXP}, Gold +{HUMAN_SURVIVAL_GOLD}");
             }
 
             // ---------------------------------------------------------------
             // (3) 숙주 좀비: 전환 횟수 × 10 EXP
             // ---------------------------------------------------------------
-            if (p.currentTeam.Value == Team.HostZombie && p.zombieConversionCount.Value > 0)
+            if (p.currentTeam.Value == Team.HostZombie && pH != null && pH.zombieConversionCount.Value > 0)
             {
-                int convExp = p.zombieConversionCount.Value * HOST_ZOMBIE_CONVERT_EXP;
+                int convExp = pH.zombieConversionCount.Value * HOST_ZOMBIE_CONVERT_EXP;
                 totalExpReward += convExp;
-                Debug.Log($"  [{p.Nickname.Value}] 숙주 좀비 전환 보상: {p.zombieConversionCount.Value}회 × {HOST_ZOMBIE_CONVERT_EXP} = EXP +{convExp}");
+                Debug.Log($"  [{(pAuth != null ? pAuth.Nickname.Value : "?")}] 숙주 좀비 전환 보상: {pH.zombieConversionCount.Value}회 × {HOST_ZOMBIE_CONVERT_EXP} = EXP +{convExp}");
             }
 
             // ---------------------------------------------------------------
             // (4) 일반 좀비: 전환 횟수 × 20 EXP
             // ---------------------------------------------------------------
-            if (p.currentTeam.Value == Team.NormalZombie && p.zombieConversionCount.Value > 0)
+            if (p.currentTeam.Value == Team.NormalZombie && pH != null && pH.zombieConversionCount.Value > 0)
             {
-                int convExp = p.zombieConversionCount.Value * NORMAL_ZOMBIE_CONVERT_EXP;
+                int convExp = pH.zombieConversionCount.Value * NORMAL_ZOMBIE_CONVERT_EXP;
                 totalExpReward += convExp;
-                Debug.Log($"  [{p.Nickname.Value}] 일반 좀비 전환 보상: {p.zombieConversionCount.Value}회 × {NORMAL_ZOMBIE_CONVERT_EXP} = EXP +{convExp}");
+                Debug.Log($"  [{(pAuth != null ? pAuth.Nickname.Value : "?")}] 일반 좀비 전환 보상: {pH.zombieConversionCount.Value}회 × {NORMAL_ZOMBIE_CONVERT_EXP} = EXP +{convExp}");
             }
 
             // ---------------------------------------------------------------
@@ -314,10 +321,9 @@ public class RoundManager : NetworkBehaviour
             // ---------------------------------------------------------------
             // (5) 데이터 저장 트리거 (클라이언트에서 로컬 파일 저장)
             // ---------------------------------------------------------------
-            p.SavePlayerDataClientRpc(totalExpReward, totalGoldReward);
+            if (pAuth != null) pAuth.SavePlayerDataClientRpc(totalExpReward, totalGoldReward);
 
-            // 서버 측 카운터 리셋
-            p.ResetRoundCounters();
+            if (pH != null) pH.ResetRoundCounters();
 
             // 클라이언트 측 DMG 카운터 리셋
             var combat = p.GetComponentInChildren<CombatSystem>();
@@ -346,9 +352,13 @@ public class RoundManager : NetworkBehaviour
                 // 인간 팀으로 복원, 체력 복구
                 p.currentTeam.Value = Team.Human;
                 p.currentZombieType.Value = ZombieType.None;
-                p.maxHealth.Value = 100; 
-                p.currentHealth.Value = 100;
-                p.isInvincible.Value = false;
+                var pH2 = p.GetComponent<PlayerHealth>();
+                if (pH2 != null)
+                {
+                    pH2.maxHealth.Value = 100; 
+                    pH2.currentHealth.Value = 100;
+                    pH2.isInvincible.Value = false;
+                }
 
                 // (0,0,0) 좌표로 리스폰
                 TeleportPlayer(p, Vector3.up);
@@ -366,7 +376,8 @@ public class RoundManager : NetworkBehaviour
         // Unity Netcode의 ClientNetworkTransform을 사용할 때, 
         // 서버에서 transform.position을 바꿔도 클라이언트(Owner) 쪽 트랜스폼 권한이 덮어쓰는 문제가 있습니다.
         // 그러므로 ClientRpc를 통해서 Client (소유주)에서 물리적 이동을 하도록 호출하여 동기화를 진행합니다.
-        player.TeleportClientRpc(position);
+        var pH = player.GetComponent<PlayerHealth>();
+        if (pH != null) pH.TeleportClientRpc(position);
     }
 
     // =========================================================================

@@ -11,13 +11,17 @@ public class FighterSkillExecutor : MonoBehaviour, ISkillExecutor
 {
     private CombatSystem combatSystem;
     private PlayerState playerState;
+    private PlayerHealth playerHealth;
+    private PlayerVFXController playerVfx;
     private CharacterController charCtrl;
     private Camera playerCamera;
 
-    public void Initialize(CombatSystem combat, PlayerState state)
+    public void Initialize(CombatSystem combat, PlayerState state, PlayerHealth health)
     {
         combatSystem = combat;
         playerState = state;
+        playerHealth = health;
+        playerVfx = GetComponent<PlayerVFXController>();
         charCtrl = GetComponentInParent<CharacterController>();
         
         var movement = GetComponentInParent<PlayerMovement>();
@@ -58,15 +62,15 @@ public class FighterSkillExecutor : MonoBehaviour, ISkillExecutor
             combatSystem.ChangeState(value ? CombatState.SkillExecuting : CombatState.Idle);
         }
 
-        if (playerState != null)
-            playerState.SetInvincibleServerRpc(value);
+        if (playerHealth != null)
+            playerHealth.SetInvincibleServerRpc(value);
     }
 
     private void SpawnVFX(int vfxType, Vector3 position, Quaternion rotation)
     {
-        if (playerState != null)
+        if (playerVfx != null)
         {
-            playerState.SpawnSkillVFXServerRpc(vfxType, position, rotation);
+            playerVfx.SpawnSkillVFXServerRpc(vfxType, position, rotation);
         }
     }
 
@@ -115,7 +119,7 @@ public class FighterSkillExecutor : MonoBehaviour, ISkillExecutor
         // 적중한 다수 모든 대상도 함께 위로 띄움
         foreach (var targetItem in targets)
         {
-            if (targetItem is PlayerState pTargetLift)
+            if (targetItem is PlayerHealth pTargetLift)
             {
                 pTargetLift.KnockUpServerRpc(Vector3.up * liftSpeed, duration);
             }
@@ -306,7 +310,7 @@ public class FighterSkillExecutor : MonoBehaviour, ISkillExecutor
                 foreach (var col in hits)
                 {
                     var target = CombatSystem.FindDamageable(col.gameObject);
-                    if (target != null && (Object)target != (Object)playerState && playerState.IsEnemy(target.CurrentTeam))
+                    if (target != null && (Object)target != (Object)playerHealth && playerState.IsEnemy(target.CurrentTeam))
                     {
                         targets.Add(target);
                     }
@@ -415,7 +419,7 @@ public class FighterSkillExecutor : MonoBehaviour, ISkillExecutor
                 foreach (var col in hits)
                 {
                     var target = CombatSystem.FindDamageable(col.gameObject);
-                    if (target != null && (Object)target != (Object)playerState && target.CurrentTeam != playerState.currentTeam.Value)
+                    if (target != null && (Object)target != (Object)playerHealth && target.CurrentTeam != playerState.currentTeam.Value)
                     {
                         // 플레이어 방향으로 끌어당기는 벡터 계산
                         Vector3 pullDir = (rootTransform.position - target.EntityTransform.position).normalized;
@@ -423,7 +427,7 @@ public class FighterSkillExecutor : MonoBehaviour, ISkillExecutor
                         pullDir.y = 0; 
                         
                         // 넉업 함수를 재활용하여 강제 이동(끌어당기기) 적용
-                        if (target is PlayerState pTargetP) pTargetP.KnockUpServerRpc(pullDir * 6f, tickInterval);
+                        if (target is PlayerHealth pTargetP) pTargetP.KnockUpServerRpc(pullDir * 6f, tickInterval);
                         
                         // 틱 데미지
                         if (combatSystem != null)
@@ -463,7 +467,7 @@ public class FighterSkillExecutor : MonoBehaviour, ISkillExecutor
         foreach (var hit in hits)
         {
             var target = CombatSystem.FindDamageable(hit.collider.gameObject);
-            if (target != null && (Object)target != (Object)playerState && playerState.IsEnemy(target.CurrentTeam))
+            if (target != null && (Object)target != (Object)playerHealth && playerState.IsEnemy(target.CurrentTeam))
             {
                 if (!damagedTargets.Contains(target) && combatSystem != null)
                 {
@@ -485,7 +489,7 @@ public class FighterSkillExecutor : MonoBehaviour, ISkillExecutor
         foreach (var col in hits)
         {
             var target = CombatSystem.FindDamageable(col.gameObject);
-            if (target != null && (Object)target != (Object)playerState && playerState.IsEnemy(target.CurrentTeam))
+            if (target != null && (Object)target != (Object)playerHealth && playerState.IsEnemy(target.CurrentTeam))
             {
                 if (combatSystem != null)
                 {

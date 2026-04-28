@@ -6,6 +6,8 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
 {
     private CombatSystem combatSystem;
     private PlayerState playerState;
+    private PlayerHealth playerHealth;
+    private PlayerVFXController playerVfx;
     private CharacterController charCtrl;
     private Camera playerCamera;
     private StatSystem statSystem;
@@ -14,10 +16,12 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
     public int ShieldEnergy { get; private set; } = 0;
     private const int MAX_ENERGY = 100;
 
-    public void Initialize(CombatSystem combat, PlayerState state)
+    public void Initialize(CombatSystem combat, PlayerState state, PlayerHealth health)
     {
         combatSystem = combat;
         playerState = state;
+        playerHealth = health;
+        playerVfx = GetComponent<PlayerVFXController>();
         charCtrl = GetComponentInParent<CharacterController>();
         var pm = GetComponentInParent<PlayerMovement>();
         if (pm != null) playerCamera = pm.GetComponentInChildren<Camera>(true);
@@ -57,12 +61,12 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
     private void SetInvincible(bool value)
     {
         if (combatSystem != null) combatSystem.ChangeState(value ? CombatState.SkillExecuting : CombatState.Idle);
-        if (playerState != null) playerState.SetInvincibleServerRpc(value);
+        if (playerHealth != null) playerHealth.SetInvincibleServerRpc(value);
     }
 
     private void SpawnVFX(int vfxType, Vector3 position, Quaternion rotation)
     {
-        if (playerState != null) playerState.SpawnSkillVFXServerRpc(vfxType, position, rotation);
+        if (playerVfx != null) playerVfx.SpawnSkillVFXServerRpc(vfxType, position, rotation);
     }
 
     // =========================================================================
@@ -95,14 +99,14 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
         foreach (var col in hits)
         {
             var target = CombatSystem.FindDamageable(col.gameObject);
-            if (target != null && (Object)target != (Object)playerState && playerState.IsEnemy(target.CurrentTeam))
+            if (target != null && (Object)target != (Object)playerHealth && playerState.IsEnemy(target.CurrentTeam))
             {
                 combatSystem.DealDamageToTarget(target, skill.damageMultiplier, skill.skillName, col.ClosestPoint(hitCenter));
-                if (target is PlayerState pState)
+                if (target is PlayerHealth pH)
                 {
-                    Vector3 pushDir = (pState.EntityTransform.position - root.position).normalized;
+                    Vector3 pushDir = (pH.EntityTransform.position - root.position).normalized;
                     pushDir.y = 0;
-                    pState.KnockUpServerRpc(pushDir * 5f, 0.3f);
+                    pH.KnockUpServerRpc(pushDir * 5f, 0.3f);
                 }
             }
         }
@@ -147,9 +151,9 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
                 foreach (var t in targets)
                 {
                     combatSystem.DealDamageToTarget(t, skill.damageMultiplier, "축복의 방패(강타)");
-                    if (t is PlayerState ps)
+                    if (t is PlayerHealth pH)
                     {
-                        ps.KnockUpServerRpc(Vector3.up * 5f, 0.5f); // 에어본
+                        pH.KnockUpServerRpc(Vector3.up * 5f, 0.5f); // 에어본
                     }
                 }
             }
@@ -164,16 +168,16 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
             foreach (var hit in hits)
             {
                 var target = CombatSystem.FindDamageable(hit.collider.gameObject);
-                if (target != null && (Object)target != (Object)playerState && playerState.IsEnemy(target.CurrentTeam))
+                if (target != null && (Object)target != (Object)playerHealth && playerState.IsEnemy(target.CurrentTeam))
                 {
                     combatSystem.DealDamageToTarget(target, skill.damageMultiplier, "축복의 방패(투척)");
                     // 100이면 장시간 스턴
                     float stunDur = usedEnergy == 100 ? 5.0f : 2.0f;
-                    if (target is PlayerState ps)
+                    if (target is PlayerHealth pH)
                     {
-                        ps.KnockUpServerRpc(root.forward * 5f, 0.2f); // 넉백
-                        // 스턴 (임시로 강제이동 0 로직 호출 시 묶이는 것 유도 또는 향후 Stun RPC 필요)
-                        ps.KnockUpServerRpc(Vector3.zero, stunDur); 
+                        pH.KnockUpServerRpc(root.forward * 5f, 0.2f); // 넉백
+                        // 스턴
+                        pH.KnockUpServerRpc(Vector3.zero, stunDur); 
                     }
                 }
             }
@@ -199,12 +203,11 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
         foreach (var t in targets)
         {
             combatSystem.DealDamageToTarget(t, skill.damageMultiplier, skill.skillName);
-            if (t is PlayerState ps)
+            if (t is PlayerHealth pH)
             {
-                ps.KnockUpServerRpc(Vector3.up * 6f, 0.5f); // 에어본
-                // 공격력 비례 화상 데미지 부여 (Type 2, 5번, 1초마다, 공격력의 20% 등)
+                pH.KnockUpServerRpc(Vector3.up * 6f, 0.5f); // 에어본
                 float tickDmg = (statSystem != null ? statSystem.GetStat(StatType.Attack) : 100f) * 0.2f;
-                ps.ApplyDoTWithAttackerServerRpc(0, 5, 1f, tickDmg, playerState.OwnerClientId); // 공격자 추적 DoT
+                pH.ApplyDoTWithAttackerServerRpc(0, 5, 1f, tickDmg, playerState.OwnerClientId); // 공격자 추적 DoT
             }
         }
 
@@ -252,9 +255,9 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
         foreach (var t in targets)
         {
             combatSystem.DealDamageToTarget(t, skill.damageMultiplier, skill.skillName);
-            if (t is PlayerState ps)
+            if (t is PlayerHealth pH)
             {
-                ps.KnockUpServerRpc((ps.EntityTransform.position - root.position).normalized * 5f + Vector3.up * 3f, 0.5f);
+                pH.KnockUpServerRpc((pH.EntityTransform.position - root.position).normalized * 5f + Vector3.up * 3f, 0.5f);
             }
         }
 
@@ -277,9 +280,9 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
         {
             combatSystem.DealDamageToTarget(t, skill.damageMultiplier, skill.skillName);
             // 공중에 뜬 적(대상이 지면에서 1m 이상 떨어져있는지 야매 체크)
-            if (t is PlayerState ps && !Physics.Raycast(ps.EntityTransform.position, Vector3.down, 1.5f))
+            if (t is PlayerHealth pH && !Physics.Raycast(pH.EntityTransform.position, Vector3.down, 1.5f))
             {
-                ps.KnockUpServerRpc(root.forward * 10f, 0.4f); // 강제 베어 날림
+                pH.KnockUpServerRpc(root.forward * 10f, 0.4f); // 강제 베어 날림
                 combatSystem.DealDamageToTarget(t, skill.damageMultiplier * 1.5f, "심판(공중추가타)");
             }
         }
@@ -303,7 +306,7 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
         foreach (var hit in hits)
         {
             var target = CombatSystem.FindDamageable(hit.collider.gameObject);
-            if (target != null && (Object)target != (Object)playerState && playerState.IsEnemy(target.CurrentTeam))
+            if (target != null && (Object)target != (Object)playerHealth && playerState.IsEnemy(target.CurrentTeam))
             {
                 combatSystem.DealDamageToTarget(target, skill.damageMultiplier, skill.skillName);
                 var pmInfo = target.EntityTransform.GetComponent<PlayerMovement>();
@@ -424,7 +427,7 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
             foreach (var t in targets)
             {
                 combatSystem.DealDamageToTarget(t, skill.damageMultiplier * 0.3f, "빛의 사도(성창폭격)");
-                if (t is PlayerState ps) ps.KnockUpServerRpc(Vector3.zero, 1.0f); // 1초 스턴
+                if (t is PlayerHealth pH) pH.KnockUpServerRpc(Vector3.zero, 1.0f); // 1초 스턴
             }
             yield return new WaitForSeconds(0.15f);
         }
@@ -448,7 +451,7 @@ public class PaladinSkillExecutor : MonoBehaviour, ISkillExecutor
         foreach (var col in hits)
         {
             var target = CombatSystem.FindDamageable(col.gameObject);
-            if (target != null && (Object)target != (Object)playerState && playerState.IsEnemy(target.CurrentTeam))
+            if (target != null && (Object)target != (Object)playerHealth && playerState.IsEnemy(target.CurrentTeam))
             {
                 if (!result.Contains(target)) result.Add(target);
             }

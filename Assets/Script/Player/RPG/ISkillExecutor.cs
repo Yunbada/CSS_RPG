@@ -9,7 +9,7 @@ public interface ISkillExecutor
     /// <summary>
     /// 초기화 (CombatSystem에서 자동 호출)
     /// </summary>
-    void Initialize(CombatSystem combat, PlayerState state);
+    void Initialize(CombatSystem combat, PlayerState state, PlayerHealth health);
 
     /// <summary>
     /// 스킬 발동 라우터

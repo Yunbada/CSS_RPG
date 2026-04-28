@@ -71,7 +71,7 @@ public class InventorySystem : NetworkBehaviour
 
         if (IsServer)
         {
-            PlayerState.OnAnyZombieDied += HandleZombieDied;
+            PlayerHealth.OnAnyZombieDied += HandleZombieDied;
         }
 
         // 클라이언트에서 동기화 변수 변경 감지
@@ -82,7 +82,7 @@ public class InventorySystem : NetworkBehaviour
     {
         if (IsServer)
         {
-            PlayerState.OnAnyZombieDied -= HandleZombieDied;
+            PlayerHealth.OnAnyZombieDied -= HandleZombieDied;
         }
         SyncedInventory.OnValueChanged -= OnSyncedInventoryChanged;
     }

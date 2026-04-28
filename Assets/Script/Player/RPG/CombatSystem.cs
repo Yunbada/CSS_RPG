@@ -4,7 +4,7 @@ using Unity.Netcode;
 /// <summary>
 /// 전투 시스템 (MonoBehaviour)
 /// NetworkBehaviour가 아니므로 런타임 AddComponent 후에도 정상 작동합니다.
-/// ServerRpc는 PlayerState.AttackTargetServerRpc()를 통해 위임합니다.
+/// ServerRpc는 PlayerHealth.AttackTargetServerRpc()를 통해 위임합니다.
 /// </summary>
 public class CombatSystem : MonoBehaviour
 {
@@ -18,6 +18,7 @@ public class CombatSystem : MonoBehaviour
     private InputHandle inputHandle;
     private PlayerClass playerClass;
     private PlayerState playerState;
+    private PlayerHealth playerHealth;
     private StatSystem statSystem;
     private SkillSystem skillSystem;
     private Camera playerCamera;
@@ -47,6 +48,7 @@ public class CombatSystem : MonoBehaviour
         inputHandle = GetComponentInParent<InputHandle>();
         playerClass = GetComponent<PlayerClass>();
         playerState = GetComponentInParent<PlayerState>();
+        playerHealth = GetComponentInParent<PlayerHealth>();
         statSystem = GetComponent<StatSystem>();
 
         // 핵심 버그 수정: RPG_System이 루트에서 이탈하는 것을 원천 차단 (로컬 좌표 0 락)
@@ -111,7 +113,7 @@ public class CombatSystem : MonoBehaviour
 
         if (currentSkillExecutor != null)
         {
-            currentSkillExecutor.Initialize(this, playerState);
+            currentSkillExecutor.Initialize(this, playerState, playerHealth);
             Debug.Log($"[CombatSystem] 스킬 실행기 {currentSkillExecutor.GetType().Name} 할당 완료.");
         }
     }
@@ -172,7 +174,7 @@ public class CombatSystem : MonoBehaviour
         foreach (var hit in hits)
         {
             var targetState = FindDamageable(hit.collider.gameObject);
-            if (targetState != null && (Object)targetState != (Object)playerState)
+            if (targetState != null && (Object)targetState != (Object)playerHealth)
             {
                 if (!playerState.IsEnemy(targetState.CurrentTeam)) continue;
 
@@ -240,7 +242,7 @@ public class CombatSystem : MonoBehaviour
         foreach (var hit in hits)
         {
             var targetState = FindDamageable(hit.collider.gameObject);
-            if (targetState != null && (Object)targetState != (Object)playerState)
+            if (targetState != null && (Object)targetState != (Object)playerHealth)
             {
                 if (targetState.CurrentTeam == playerState.currentTeam.Value) continue;
 
@@ -261,7 +263,7 @@ public class CombatSystem : MonoBehaviour
         foreach (var col in hits)
         {
             var targetState = FindDamageable(col.gameObject);
-            if (targetState != null && (Object)targetState != (Object)playerState)
+            if (targetState != null && (Object)targetState != (Object)playerHealth)
             {
                 if (targetState.CurrentTeam == playerState.currentTeam.Value) continue;
 
@@ -311,9 +313,9 @@ public class CombatSystem : MonoBehaviour
     // 서버 RPC 호출 위임 (타격 지점 포함)
     private void SendDamage(IDamageable target, int damage, string skillName, Vector3 hitPosition)
     {
-        if (playerState != null && target != null)
+        if (playerHealth != null && target != null)
         {
-            playerState.AttackTargetServerRpc(target.GetNetworkObject(), damage, skillName, hitPosition);
+            playerHealth.AttackTargetServerRpc(target.GetNetworkObject(), damage, skillName, hitPosition);
             TotalDamageDealt += damage; // 누적 데미지 기록
             
             // 성기사 방패 에너지 후킹 (리플렉션 또는 빠른 캐스팅)

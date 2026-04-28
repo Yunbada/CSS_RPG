@@ -256,9 +256,10 @@ public class UIGameHUDRuntime : MonoBehaviour
 
         var localObj = NetworkManager.Singleton.LocalClient.PlayerObject;
         var localState = localObj.GetComponentInChildren<PlayerState>();
+        var localAuth = localObj.GetComponentInChildren<PlayerAuthentication>();
 
         // ★ 핵심 수정: 게임에 입장하지 않은 플레이어는 HUD를 절대 보여주지 않음
-        if (localState == null || !localState.isEnteredGame.Value)
+        if (localAuth == null || !localAuth.isEnteredGame.Value)
         {
             if (canvasObj != null) canvasObj.SetActive(false);
             return;
@@ -313,7 +314,9 @@ public class UIGameHUDRuntime : MonoBehaviour
         int zombieCount = 0;
         foreach (var p in PlayerState.AllPlayersList)
         {
-            if (p != null && p.isEnteredGame.Value)
+            if (p == null) continue;
+            var pAuth = p.GetComponent<PlayerAuthentication>();
+            if (pAuth != null && pAuth.isEnteredGame.Value)
             {
                 if (p.currentTeam.Value == Team.Human) humanCount++;
                 else zombieCount++;
@@ -332,9 +335,10 @@ public class UIGameHUDRuntime : MonoBehaviour
         bool isZombie = state != null && state.currentTeam.Value != Team.Human;
 
         // HP
-        if (hpText != null && state != null)
+        var health = localObj.GetComponentInChildren<PlayerHealth>();
+        if (hpText != null && health != null)
         {
-            hpText.text = $"HP: {state.currentHealth.Value} / {state.maxHealth.Value}";
+            hpText.text = $"HP: {health.currentHealth.Value} / {health.maxHealth.Value}";
         }
 
         // Exp / Level
@@ -346,9 +350,9 @@ public class UIGameHUDRuntime : MonoBehaviour
         }
 
         // 누적 데미지 (서버 측 NetworkVariable에서 읽음 - DoT 포함 정확한 값)
-        if (totalDamageText != null && state != null)
+        if (totalDamageText != null && health != null)
         {
-            totalDamageText.text = $"DMG: {state.totalDamageDealt.Value}";
+            totalDamageText.text = $"DMG: {health.totalDamageDealt.Value}";
         }
 
         // 버그#1: 전직 이름 표시 - 좀비면 "좀비"로 표시

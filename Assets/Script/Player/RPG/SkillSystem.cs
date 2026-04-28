@@ -30,6 +30,7 @@ public class SkillSystem : MonoBehaviour
     private PlayerClass playerClass;
     private InventoryUIController invUIController; // Phase 3: 인벤토리 UI 상태머신
     private PlayerState playerState;
+    private PlayerHealth playerHealth;
 
     private bool isInitialized = false;
     private bool isZombie = false;
@@ -44,6 +45,7 @@ public class SkillSystem : MonoBehaviour
     {
         playerClass = pClass;
         playerState = GetComponent<PlayerState>();
+        playerHealth = GetComponent<PlayerHealth>();
         
         // 직업 변경 이벤트를 구독하여 스킬 목록을 재구성
         if (playerClass != null)
@@ -209,14 +211,14 @@ public class SkillSystem : MonoBehaviour
             // 힐 스킬 처리 (응급 치료 / 흡혈 등 — 스킬 이름으로 판별)
             if (skill.skillName.Contains("응급 치료") || skill.skillName.Contains("흡혈"))
             {
-                var pState = GetComponent<PlayerState>();
-                if (pState != null)
+                var pHealth = GetComponent<PlayerHealth>();
+                if (pHealth != null)
                 {
                     int healAmount = 50;
-                    if (isZombie && pState.currentTeam.Value == Team.HostZombie)
+                    if (isZombie && playerState.currentTeam.Value == Team.HostZombie)
                         healAmount = 80;
 
-                    pState.HealServerRpc(healAmount);
+                    pHealth.HealServerRpc(healAmount);
                     Debug.Log($"회복 스킬 발동! HP가 {healAmount} 회복되었습니다.");
                 }
             }

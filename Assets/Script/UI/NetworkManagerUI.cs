@@ -183,12 +183,12 @@ public class NetworkManagerUI : MonoBehaviour
             return;
         }
 
-        // PlayerState는 RPG_Systems 자식에 있으므로 GetComponentInChildren 사용
-        var pState = localPlayer.GetComponentInChildren<PlayerState>();
-        if (pState != null)
+        // PlayerAuthentication은 RPG_Systems 자식에 있으므로 GetComponentInChildren 사용
+        var pAuth = localPlayer.GetComponentInChildren<PlayerAuthentication>();
+        if (pAuth != null)
         {
             ShowMessage("로그인 요청 중...", Color.yellow);
-            pState.LoginRequestServerRpc(id, pw);
+            pAuth.LoginRequestServerRpc(id, pw);
         }
         else
         {
@@ -241,11 +241,11 @@ public class NetworkManagerUI : MonoBehaviour
         var localPlayer = NetworkManager.Singleton.LocalClient?.PlayerObject;
         if (localPlayer != null)
         {
-            // PlayerState는 RPG_Systems 자식에 있으므로 GetComponentInChildren 사용
-            var pState = localPlayer.GetComponentInChildren<PlayerState>();
-            if (pState != null)
+            // PlayerAuthentication은 RPG_Systems 자식에 있으므로 GetComponentInChildren 사용
+            var pAuth = localPlayer.GetComponentInChildren<PlayerAuthentication>();
+            if (pAuth != null)
             {
-                pState.RegisterRequestServerRpc(id, pw, nick);
+                pAuth.RegisterRequestServerRpc(id, pw, nick);
             }
         }
     }
@@ -314,11 +314,11 @@ public class NetworkManagerUI : MonoBehaviour
         var localPlayer = NetworkManager.Singleton.LocalClient?.PlayerObject;
         if (localPlayer != null)
         {
-            // PlayerState는 RPG_Systems 자식에 있으므로 GetComponentInChildren 사용
-            var pState = localPlayer.GetComponentInChildren<PlayerState>();
-            if (pState != null)
+            // PlayerAuthentication은 RPG_Systems 자식에 있으므로 GetComponentInChildren 사용
+            var pAuth = localPlayer.GetComponentInChildren<PlayerAuthentication>();
+            if (pAuth != null)
             {
-                pState.RequestEnterGameServerRpc();
+                pAuth.RequestEnterGameServerRpc();
             }
         }
         HideCanvas();

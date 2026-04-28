@@ -10,14 +10,18 @@ public class MageSkillExecutor : MonoBehaviour, ISkillExecutor
 {
     private CombatSystem combatSystem;
     private PlayerState playerState;
+    private PlayerHealth playerHealth;
+    private PlayerVFXController playerVfx;
     private Camera playerCamera;
 
     private CharacterController charCtrl;
 
-    public void Initialize(CombatSystem combat, PlayerState state)
+    public void Initialize(CombatSystem combat, PlayerState state, PlayerHealth health)
     {
         combatSystem = combat;
         playerState = state;
+        playerHealth = health;
+        playerVfx = GetComponent<PlayerVFXController>();
         charCtrl = GetComponentInParent<CharacterController>();
         var pm = GetComponentInParent<PlayerMovement>();
         if (pm != null) playerCamera = pm.GetComponentInChildren<Camera>(true);
@@ -100,7 +104,7 @@ public class MageSkillExecutor : MonoBehaviour, ISkillExecutor
         foreach (var col in hits)
         {
             var target = CombatSystem.FindDamageable(col.gameObject);
-            if (target != null && (Object)target != (Object)playerState && playerState.IsEnemy(target.CurrentTeam))
+            if (target != null && (Object)target != (Object)playerHealth && playerState.IsEnemy(target.CurrentTeam))
             {
                 if (combatSystem != null)
                 {

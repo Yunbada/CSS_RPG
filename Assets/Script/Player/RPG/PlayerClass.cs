@@ -38,8 +38,8 @@ public class PlayerClass : NetworkBehaviour
             combatSys = gameObject.AddComponent<CombatSystem>();
 
         // ★ 핵심 수정: 격리 중(isEnteredGame == false)에는 새로 추가한 컴포넌트도 즉시 비활성화
-        var pState = GetComponent<PlayerState>();
-        bool isActive = pState != null && pState.isEnteredGame.Value;
+        var pAuth = GetComponent<PlayerAuthentication>();
+        bool isActive = pAuth != null && pAuth.isEnteredGame.Value;
         if (skillSys != null) skillSys.enabled = isActive;
         if (combatSys != null) combatSys.enabled = isActive;
 
