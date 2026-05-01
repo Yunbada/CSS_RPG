@@ -37,6 +37,12 @@ public abstract class BaseSkillExecutor : MonoBehaviour, ISkillExecutor
 
     public abstract void ExecuteSkill(int skillIndex, SkillData skill);
 
+    /// <summary>
+    /// 데미지를 입혔을 때 호출되는 콜백.
+    /// 기본 구현은 아무 것도 하지 않습니다. 직업별 게이지(예: 성기사 방패 에너지)가 필요하면 override하세요.
+    /// </summary>
+    public virtual void OnDamageDealt(int damage) { }
+
     protected void SetInvincible(bool value)
     {
         if (combatSystem != null)

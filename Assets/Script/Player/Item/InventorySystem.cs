@@ -54,21 +54,6 @@ public class InventorySystem : NetworkBehaviour
     // =========================================================================
     public override void OnNetworkSpawn()
     {
-        if (IsOwner && LocalUserData.Current != null)
-        {
-            // 레거시 재료 동기화
-            SyncLegacyMaterialsServerRpc(
-                LocalUserData.Current.Leather,
-                LocalUserData.Current.Tooth,
-                LocalUserData.Current.Skull);
-
-            // 새 인벤토리 데이터 로드
-            if (!string.IsNullOrEmpty(LocalUserData.Current.InventoryData))
-            {
-                LoadInventoryServerRpc(LocalUserData.Current.InventoryData);
-            }
-        }
-
         if (IsServer)
         {
             PlayerHealth.OnAnyZombieDied += HandleZombieDied;
@@ -330,6 +315,10 @@ public class InventorySystem : NetworkBehaviour
     // =========================================================================
     // 직렬화 / 역직렬화 (네트워크 동기화 + CSV 저장)
     // =========================================================================
+
+    /// <summary>인벤토리 슬롯 데이터를 문자열로 직렬화합니다. 외부에서도 호출 가능합니다.</summary>
+    public string SerializeInventory() => SerializeSlots();
+
     private string SerializeSlots()
     {
         // 형식: "itemId:count;itemId:count;..."
@@ -372,36 +361,23 @@ public class InventorySystem : NetworkBehaviour
     // =========================================================================
     private void SaveToCSV()
     {
-        SaveDataClientRpc(
-            LeatherCount.Value, ToothCount.Value, SkullCount.Value,
-            SerializeSlots());
+        if (!IsServer) return;
+        var auth = GetComponent<PlayerAuthentication>();
+        if (auth != null) auth.SaveDataToDatabase();
     }
 
     [ServerRpc]
-    private void LoadInventoryServerRpc(string inventoryData)
+    public void LoadInventoryServerRpc(string inventoryData)
     {
         DeserializeSlots(inventoryData);
         SyncToNetwork();
-    }
-
-    [ClientRpc]
-    private void SaveDataClientRpc(int l, int t, int s, string inventoryData)
-    {
-        if (IsOwner && LocalUserData.Current != null)
-        {
-            LocalUserData.Current.Leather = l;
-            LocalUserData.Current.Tooth = t;
-            LocalUserData.Current.Skull = s;
-            LocalUserData.Current.InventoryData = inventoryData;
-            CsvDatabase.Instance.SaveUser(LocalUserData.Current);
-        }
     }
 
     // =========================================================================
     // 레거시 재료 호환
     // =========================================================================
     [ServerRpc]
-    private void SyncLegacyMaterialsServerRpc(int l, int t, int s)
+    public void SyncLegacyMaterialsServerRpc(int l, int t, int s)
     {
         LeatherCount.Value = l;
         ToothCount.Value = t;

@@ -8,25 +8,22 @@ public class PlayerExperience : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        if (IsOwner && LocalUserData.Current != null)
-        {
-            LoadDataServerRpc(LocalUserData.Current.Level, LocalUserData.Current.Exp);
-        }
     }
 
     [ServerRpc]
-    private void LoadDataServerRpc(int level, int exp)
+    public void LoadDataServerRpc(int level, int exp)
     {
         Level.Value = level;
         CurrentExp.Value = exp;
     }
 
-    [ServerRpc(RequireOwnership = false)]
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     public void SetCheatLevelServerRpc(int level)
     {
         Level.Value = level;
         CurrentExp.Value = 0;
-        SaveDataClientRpc(Level.Value, CurrentExp.Value);
+        var auth = GetComponent<PlayerAuthentication>();
+        if (auth != null) auth.SaveDataToDatabase();
     }
 
     // 서버 전용 함수
@@ -51,20 +48,6 @@ public class PlayerExperience : NetworkBehaviour
             CurrentExp.Value -= requiredExp;
             Level.Value++;
             Debug.Log($"Player {OwnerClientId} Leveled Up to {Level.Value}!");
-        }
-
-        // 상태 저장 트리거
-        SaveDataClientRpc(Level.Value, CurrentExp.Value);
-    }
-
-    [ClientRpc]
-    private void SaveDataClientRpc(int newLv, int newExp)
-    {
-        if (IsOwner && LocalUserData.Current != null)
-        {
-            LocalUserData.Current.Level = newLv;
-            LocalUserData.Current.Exp = newExp;
-            CsvDatabase.Instance.SaveUser(LocalUserData.Current);
         }
     }
 }

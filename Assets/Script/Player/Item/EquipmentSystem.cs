@@ -53,14 +53,6 @@ public class EquipmentSystem : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        if (IsOwner && LocalUserData.Current != null)
-        {
-            if (!string.IsNullOrEmpty(LocalUserData.Current.EquipmentData))
-            {
-                LoadEquipmentServerRpc(LocalUserData.Current.EquipmentData);
-            }
-        }
-
         SyncedEquipment.OnValueChanged += OnSyncedEquipmentChanged;
     }
 
@@ -193,13 +185,14 @@ public class EquipmentSystem : NetworkBehaviour
     // =========================================================================
     // 직렬화 / 역직렬화
     // =========================================================================
-    private string SerializeEquipment()
+    public string SerializeEquipment()
     {
-        // 형식: "Weapon:1001,Helmet:0,Armor:1003,Gloves:0,Boots:0"
+        // 형식: "Weapon:1001;Helmet:0;Armor:1003;Gloves:0;Boots:0"
+        // CSV와 구분자 충돌 방지를 위해 세미콜론(;) 사용
         var sb = new System.Text.StringBuilder();
         for (int i = 0; i < SlotOrder.Length; i++)
         {
-            if (i > 0) sb.Append(',');
+            if (i > 0) sb.Append(';');
             sb.Append(SlotOrder[i]).Append(':').Append(equippedItems[SlotOrder[i]]);
         }
         return sb.ToString();
@@ -209,15 +202,17 @@ public class EquipmentSystem : NetworkBehaviour
     {
         if (string.IsNullOrEmpty(data)) return;
 
-        string[] parts = data.Split(',');
+        // 세미콜론(;) 또는 쉼표(,)를 모두 지원 (기존 데이터 하위호환)
+        char delimiter = data.Contains(';') ? ';' : ',';
+        string[] parts = data.Split(delimiter);
         foreach (string part in parts)
         {
             string[] kv = part.Split(':');
             if (kv.Length >= 2)
             {
-                if (System.Enum.TryParse(kv[0], out ItemSlot slot))
+                if (System.Enum.TryParse(kv[0].Trim(), out ItemSlot slot))
                 {
-                    int.TryParse(kv[1], out int itemId);
+                    int.TryParse(kv[1].Trim(), out int itemId);
                     equippedItems[slot] = itemId;
                 }
             }
@@ -235,11 +230,13 @@ public class EquipmentSystem : NetworkBehaviour
     // =========================================================================
     private void SaveToCSV()
     {
-        SaveEquipmentClientRpc(SerializeEquipment());
+        if (!IsServer) return;
+        var auth = GetComponent<PlayerAuthentication>();
+        if (auth != null) auth.SaveDataToDatabase();
     }
 
     [ServerRpc]
-    private void LoadEquipmentServerRpc(string equipData)
+    public void LoadEquipmentServerRpc(string equipData)
     {
         DeserializeEquipment(equipData);
 
@@ -262,16 +259,6 @@ public class EquipmentSystem : NetworkBehaviour
         }
 
         SyncToNetwork();
-    }
-
-    [ClientRpc]
-    private void SaveEquipmentClientRpc(string equipData)
-    {
-        if (IsOwner && LocalUserData.Current != null)
-        {
-            LocalUserData.Current.EquipmentData = equipData;
-            CsvDatabase.Instance.SaveUser(LocalUserData.Current);
-        }
     }
 
     // =========================================================================

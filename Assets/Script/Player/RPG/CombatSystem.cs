@@ -9,9 +9,11 @@ using Unity.Netcode;
 public class CombatSystem : MonoBehaviour
 {
     [Header("기본 공격 설정")]
-    [SerializeField] private float basicAttackRange = 4f;
+    [SerializeField] private float basicAttackRange = 1.5f;
     [SerializeField] private float basicAttackCooldown = 0.5f;
     [SerializeField] private float basicAttackMultiplier = 1.0f;
+    [SerializeField] private float basicAttackRadius = 0.5f;
+    [SerializeField] private float basicAttackAngle = 120f;  // 전방 판정 각도 (도)
 
     private float basicAttackTimer = 0f;
 
@@ -157,7 +159,6 @@ public class CombatSystem : MonoBehaviour
     // =========================================================================
     private void PerformBasicAttack()
     {
-        if (playerCamera == null) return;
         StartCoroutine(BasicAttackCoroutine());
     }
 
@@ -165,15 +166,23 @@ public class CombatSystem : MonoBehaviour
     {
         ChangeState(CombatState.BasicAttacking);
 
-        Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
+        // 플레이어 루트 트랜스폼 기준 전방 판정
+        Transform root = transform.root;
+        Vector3 origin = root.position + Vector3.up * 1.0f; // 허리 높이
+        Vector3 forward = root.forward;
         
-        // SphereCastAll을 사용하여 타격 범위를 후하게 판정 (반경 1.5m 캡슐 형태 전방 투사)
-        var hits = Physics.SphereCastAll(ray, 1.5f, basicAttackRange);
+        // OverlapSphere로 반경 내 모든 콜라이더 탐지
+        var colliders = Physics.OverlapSphere(origin, basicAttackRange);
         var damaged = new System.Collections.Generic.HashSet<IDamageable>();
         
-        foreach (var hit in hits)
+        foreach (var col in colliders)
         {
-            var targetState = FindDamageable(hit.collider.gameObject);
+            // 전방 각도 체크: 플레이어 전방 방향과 적 방향의 각도가 허용 범위 내인지
+            Vector3 dirToTarget = (col.transform.position - origin).normalized;
+            float angle = Vector3.Angle(forward, dirToTarget);
+            if (angle > basicAttackAngle * 0.5f) continue; // 전방 범위 밖이면 무시
+            
+            var targetState = FindDamageable(col.gameObject);
             if (targetState != null && (Object)targetState != (Object)playerHealth)
             {
                 if (!playerState.IsEnemy(targetState.CurrentTeam)) continue;
@@ -181,7 +190,7 @@ public class CombatSystem : MonoBehaviour
                 if (damaged.Add(targetState)) // 중복 타격 방지
                 {
                     int damage = CalculateDamage(basicAttackMultiplier, targetState);
-                    SendDamage(targetState, damage, "기본 공격", hit.point);
+                    SendDamage(targetState, damage, "기본 공격", col.ClosestPoint(origin));
                 }
             }
         }
@@ -194,6 +203,35 @@ public class CombatSystem : MonoBehaviour
         {
             ChangeState(CombatState.Idle);
         }
+    }
+
+    // =========================================================================
+    // 기본 공격 범위 시각화 (에디터 전용 기즈모)
+    // =========================================================================
+    private void OnDrawGizmosSelected()
+    {
+        Transform root = transform.root;
+        Vector3 origin = root.position + Vector3.up * 1.0f;
+        Vector3 forward = root.forward;
+
+        // 공격 범위 원 (반투명 빨강)
+        Gizmos.color = new Color(1f, 0.2f, 0.2f, 0.25f);
+        Gizmos.DrawSphere(origin, basicAttackRange);
+
+        // 전방 판정 원뿔 경계선 (노란색)
+        Gizmos.color = Color.yellow;
+        float halfAngle = basicAttackAngle * 0.5f;
+        
+        // 원뿔 좌측/우측 경계 벡터
+        Vector3 leftBoundary = Quaternion.Euler(0, -halfAngle, 0) * forward * basicAttackRange;
+        Vector3 rightBoundary = Quaternion.Euler(0, halfAngle, 0) * forward * basicAttackRange;
+        
+        Gizmos.DrawLine(origin, origin + leftBoundary);
+        Gizmos.DrawLine(origin, origin + rightBoundary);
+        
+        // 전방 방향 중심선 (녹색)
+        Gizmos.color = Color.green;
+        Gizmos.DrawLine(origin, origin + forward * basicAttackRange);
     }
 
     // =========================================================================
@@ -318,10 +356,10 @@ public class CombatSystem : MonoBehaviour
             playerHealth.AttackTargetServerRpc(target.GetNetworkObject(), damage, skillName, hitPosition);
             TotalDamageDealt += damage; // 누적 데미지 기록
             
-            // 성기사 방패 에너지 후킹 (리플렉션 또는 빠른 캐스팅)
-            if (currentSkillExecutor is PaladinSkillExecutor paladin)
+            // OCP: 직업 고유 게이지 충전 등은 각 실행기의 OnDamageDealt에서 처리
+            if (currentSkillExecutor != null)
             {
-                paladin.AddShieldEnergy(5);
+                currentSkillExecutor.OnDamageDealt(damage);
             }
         }
     }

@@ -328,7 +328,7 @@ public class SkillSystem : MonoBehaviour
                 break;
         }
 
-        // 새로운 GUI가 생기기 전까지 스킬 UI 갱신은 생략됩니다.
+        Debug.Log($"[SkillSystem] 하드코딩 폴백 스킬 로드: {classNameKor}");
     }
 
     // =========================================================================
@@ -355,7 +355,7 @@ public class SkillSystem : MonoBehaviour
             // 일반 좀비는 스킬이 없음
         }
 
-        // 새로운 GUI가 생기기 전까지 스킬 UI 갱신은 생략됩니다.
+        Debug.Log($"[SkillSystem] 좀비 스킬 로드: {classNameKor}");
     }
 
     // 스킬 데이터 입력을 편리하게 하기 위한 헬퍼 함수 (전투 참수 포함)

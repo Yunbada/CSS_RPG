@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Text;
 
+[System.Serializable]
 public class UserData
 {
     public string PersonalCode;
@@ -16,7 +17,7 @@ public class UserData
     public int Skull;
     public int Gold;              // 재화 (원)
     public string InventoryData;  // "itemId:count;itemId:count;..." 형식
-    public string EquipmentData;  // "Weapon:1001,Helmet:0,..." 형식
+    public string EquipmentData;  // "Weapon:1001;Helmet:0;..." 형식 (세미콜론 구분)
     public string Nickname;       // 플레이어 닉네임
 }
 
@@ -96,11 +97,52 @@ public class CsvDatabase : MonoBehaviour
                 int.TryParse(cols[8], out d.Skull);
                 // Gold 컬럼 (하위 호환)
                 if (cols.Length > 9) int.TryParse(cols[9], out d.Gold);
-                // 새 컬럼 (하위 호환: 없으면 빈 문자열)
+                
+                // InventoryData: 세미콜론 구분이므로 cols[10]에 안전하게 들어감
                 d.InventoryData = cols.Length > 10 ? cols[10] : "";
-                d.EquipmentData = cols.Length > 11 ? cols[11] : "";
-                d.Nickname = cols.Length > 12 ? cols[12] : "";
+                
+                // EquipmentData & Nickname 스마트 파싱:
+                // 기존 데이터에서 EquipmentData가 쉼표를 포함할 수 있으므로,
+                // 마지막 컬럼 = Nickname, 중간(cols[11] ~ cols[끝-1]) = EquipmentData로 처리
+                if (cols.Length >= 13)
+                {
+                    // 마지막 컬럼이 닉네임
+                    d.Nickname = cols[cols.Length - 1];
+                    
+                    // cols[11] ~ cols[끝-2]를 합쳐서 EquipmentData 복원
+                    // (기존 쉼표 구분 데이터와 새 세미콜론 구분 데이터 모두 처리)
+                    var equipParts = new System.Text.StringBuilder();
+                    for (int c = 11; c < cols.Length - 1; c++)
+                    {
+                        if (c > 11) equipParts.Append(';'); // 세미콜론으로 재결합
+                        equipParts.Append(cols[c]);
+                    }
+                    d.EquipmentData = equipParts.ToString();
+                }
+                else if (cols.Length == 12)
+                {
+                    // cols[11]이 EquipmentData 또는 Nickname일 수 있음
+                    // EquipmentData는 "Weapon:" 같은 패턴을 포함하므로 구분 가능
+                    string lastCol = cols[11];
+                    if (lastCol.Contains(":"))
+                    {
+                        d.EquipmentData = lastCol;
+                        d.Nickname = "";
+                    }
+                    else
+                    {
+                        d.EquipmentData = "";
+                        d.Nickname = lastCol;
+                    }
+                }
+                else
+                {
+                    d.EquipmentData = cols.Length > 11 ? cols[11] : "";
+                    d.Nickname = "";
+                }
+                
                 cachedData[d.ID] = d;
+                Debug.Log($"[CsvDatabase] 로드: {d.ID} (Lv{d.Level}, Class{d.ClassIndex}, Equip='{d.EquipmentData}', Nick='{d.Nickname}')");
             }
         }
     }
@@ -152,11 +194,11 @@ public class CsvDatabase : MonoBehaviour
 
     public void SaveUser(UserData target)
     {
-        if (target == null) return;
-        if (cachedData.ContainsKey(target.ID))
-        {
-            cachedData[target.ID] = target;
-            SaveCacheToFile();
-        }
+        if (target == null || string.IsNullOrEmpty(target.ID)) return;
+        
+        // upsert: 캐시에 없으면 신규 추가, 있으면 갱신
+        cachedData[target.ID] = target;
+        SaveCacheToFile();
+        Debug.Log($"[CsvDatabase] SaveUser 완료: {target.ID} (Lv{target.Level}, Class{target.ClassIndex}, Gold{target.Gold})");
     }
 }

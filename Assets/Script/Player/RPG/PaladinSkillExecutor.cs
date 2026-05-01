@@ -19,6 +19,15 @@ public class PaladinSkillExecutor : BaseSkillExecutor
         ShieldEnergy = 0;
     }
 
+    /// <summary>
+    /// CombatSystem에서 데미지를 입힐 때마다 호출됩니다.
+    /// 성기사 고유 메카닉: 공격 시 방패 에너지 5 충전.
+    /// </summary>
+    public override void OnDamageDealt(int damage)
+    {
+        AddShieldEnergy(5);
+    }
+
     public override void ExecuteSkill(int skillIndex, SkillData skill)
     {
         switch (skillIndex)

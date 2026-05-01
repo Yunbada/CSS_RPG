@@ -16,6 +16,12 @@ public class PlayerAuthentication : NetworkBehaviour
     public NetworkVariable<bool> isEnteredGame = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+    public NetworkVariable<int> Gold = new NetworkVariable<int>(
+        0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    // 서버 측에서 현재 접속한 유저의 정보를 보관하는 캐시 데이터
+    private UserData _serverUserData;
+
     // 같은 게임오브젝트에 있는 형제 컴포넌트 참조 (느슨한 결합)
     private PlayerLifecycleManager lifecycleManager;
 
@@ -56,6 +62,59 @@ public class PlayerAuthentication : NetworkBehaviour
     {
         base.OnNetworkDespawn();
         isEnteredGame.OnValueChanged -= OnEnteredGameChanged;
+
+        // 접속 해제 시 서버에서 직접 데이터 저장
+        if (IsServer)
+        {
+            SaveDataToDatabase();
+            Debug.Log("[PlayerAuthentication] 접속 해제 시 데이터 자동 저장 완료 (Server-Authoritative)");
+        }
+    }
+
+    /// <summary>
+    /// 서버가 현재 시점의 하위 컴포넌트 변수들을 모두 긁어모아 직접 CSV에 저장합니다.
+    /// 라운드 종료, 접속 해제 시 호출됩니다.
+    /// </summary>
+    public void SaveDataToDatabase()
+    {
+        if (!IsServer || _serverUserData == null || CsvDatabase.Instance == null) return;
+
+        // 레벨 & 경험치
+        var pExp = GetComponentInChildren<PlayerExperience>();
+        if (pExp != null)
+        {
+            _serverUserData.Level = pExp.Level.Value;
+            _serverUserData.Exp = pExp.CurrentExp.Value;
+        }
+
+        // 전직 정보
+        var pClass = GetComponentInChildren<PlayerClass>();
+        if (pClass != null)
+        {
+            _serverUserData.ClassIndex = (int)pClass.currentClass.Value;
+        }
+
+        // 인벤토리 데이터
+        var invSys = GetComponentInChildren<InventorySystem>();
+        if (invSys != null)
+        {
+            _serverUserData.Leather = invSys.LeatherCount.Value;
+            _serverUserData.Tooth = invSys.ToothCount.Value;
+            _serverUserData.Skull = invSys.SkullCount.Value;
+            _serverUserData.InventoryData = invSys.SerializeInventory();
+        }
+
+        // 장비 데이터
+        var equipSys = GetComponentInChildren<EquipmentSystem>();
+        if (equipSys != null)
+        {
+            _serverUserData.EquipmentData = equipSys.SerializeEquipment();
+        }
+
+        _serverUserData.Gold = Gold.Value;
+
+        CsvDatabase.Instance.SaveUser(_serverUserData);
+        Debug.Log($"[Server] 데이터 저장 완료: {_serverUserData.ID} (Lv: {_serverUserData.Level}, Gold: {_serverUserData.Gold})");
     }
 
     private void OnEnteredGameChanged(bool oldVal, bool newVal)
@@ -70,7 +129,7 @@ public class PlayerAuthentication : NetworkBehaviour
     // 로그인 / 회원가입 RPC
     // =========================================================================
 
-    [Rpc(SendTo.Server, RequireOwnership = true)]
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
     public void LoginRequestServerRpc(string id, string pw)
     {
         if (CsvDatabase.Instance == null)
@@ -82,6 +141,8 @@ public class PlayerAuthentication : NetworkBehaviour
         var userData = CsvDatabase.Instance.LoginUser(id, pw);
         if (userData != null)
         {
+            _serverUserData = userData;
+            Gold.Value = userData.Gold;
             string json = JsonUtility.ToJson(userData);
             AuthResponseClientRpc(true, json, "Login Success");
         }
@@ -91,7 +152,7 @@ public class PlayerAuthentication : NetworkBehaviour
         }
     }
 
-    [Rpc(SendTo.Server, RequireOwnership = true)]
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
     public void RegisterRequestServerRpc(string id, string pw, string nick)
     {
         if (CsvDatabase.Instance == null)
@@ -141,7 +202,7 @@ public class PlayerAuthentication : NetworkBehaviour
     // 게임 입장 요청
     // =========================================================================
 
-    [Rpc(SendTo.Server, RequireOwnership = true)]
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Owner)]
     public void RequestEnterGameServerRpc()
     {
         isEnteredGame.Value = true;
@@ -170,6 +231,32 @@ public class PlayerAuthentication : NetworkBehaviour
         {
             lifecycleManager.SetPlayerActiveState(true);
         }
+
+        PushLocalDataToServer();
+    }
+
+    private void PushLocalDataToServer()
+    {
+        if (LocalUserData.Current == null) return;
+
+        var data = LocalUserData.Current;
+        var expSys = GetComponent<PlayerExperience>();
+        var classSys = GetComponent<PlayerClass>();
+        var invSys = GetComponent<InventorySystem>();
+        var equipSys = GetComponent<EquipmentSystem>();
+
+        if (expSys != null) expSys.LoadDataServerRpc(data.Level, data.Exp);
+        if (classSys != null) classSys.ChangeClassServerRpc((PlayerClassType)data.ClassIndex);
+        if (invSys != null) 
+        {
+            invSys.SyncLegacyMaterialsServerRpc(data.Leather, data.Tooth, data.Skull);
+            if (!string.IsNullOrEmpty(data.InventoryData))
+                invSys.LoadInventoryServerRpc(data.InventoryData);
+        }
+        if (equipSys != null && !string.IsNullOrEmpty(data.EquipmentData))
+        {
+            equipSys.LoadEquipmentServerRpc(data.EquipmentData);
+        }
     }
 
     // =========================================================================
@@ -188,19 +275,7 @@ public class PlayerAuthentication : NetworkBehaviour
         ServerConsole.LogConnection(nick, ip);
     }
 
-    /// <summary>라운드 종료 후 모든 플레이어 데이터 저장 (클라이언트에서 실행)</summary>
-    [ClientRpc]
-    public void SavePlayerDataClientRpc(int expReward, int goldReward)
-    {
-        if (!IsOwner || LocalUserData.Current == null) return;
-        var pExp = GetComponentInChildren<PlayerExperience>();
-        if (pExp != null)
-        {
-            LocalUserData.Current.Level = pExp.Level.Value;
-            LocalUserData.Current.Exp = pExp.CurrentExp.Value;
-        }
-        LocalUserData.Current.Gold += goldReward;
-        CsvDatabase.Instance.SaveUser(LocalUserData.Current);
-        Debug.Log($"[SaveData] EXP+{expReward}, Gold+{goldReward} 저장 완료");
-    }
+    // SavePlayerDataClientRpc는 서버 주도 아키텍처 개편으로 인해 삭제되었습니다.
+
+
 }

@@ -51,11 +51,6 @@ public class PlayerClass : NetworkBehaviour
                 if (skillSys != null) skillSys.InitializeSkillSystem(this);
                 if (combatSys != null) combatSys.InitializeCombatSystem();
             }
-            
-            if (LocalUserData.Current != null)
-            {
-                ChangeClassServerRpc((PlayerClassType)LocalUserData.Current.ClassIndex);
-            }
         }
     }
 
@@ -66,7 +61,8 @@ public class PlayerClass : NetworkBehaviour
             currentClass.Value = newClass;
             awakeningLevel.Value = 0; // 전직 시 각성 초기화
             ApplyClassBaseStats(newClass);
-            SaveDataClientRpc((int)newClass); // Server also needs to trigger save for itself
+            var auth = GetComponent<PlayerAuthentication>();
+            if (auth != null) auth.SaveDataToDatabase();
         }
         else
         {
@@ -99,17 +95,6 @@ public class PlayerClass : NetworkBehaviour
         currentClass.Value = newClass;
         awakeningLevel.Value = 0; // 전직 시 각성 초기화
         ApplyClassBaseStats(newClass);
-        SaveDataClientRpc((int)newClass);
-    }
-
-    [ClientRpc]
-    private void SaveDataClientRpc(int classIdx)
-    {
-        if (IsOwner && LocalUserData.Current != null)
-        {
-            LocalUserData.Current.ClassIndex = classIdx;
-            CsvDatabase.Instance.SaveUser(LocalUserData.Current);
-        }
     }
 
     private void ApplyClassBaseStats(PlayerClassType targetClass)

@@ -319,9 +319,14 @@ public class RoundManager : NetworkBehaviour
             }
 
             // ---------------------------------------------------------------
-            // (5) 데이터 저장 트리거 (클라이언트에서 로컬 파일 저장)
+            // (5) 서버에서 직접 골드 지급 및 데이터 저장 (Server-Authoritative)
             // ---------------------------------------------------------------
-            if (pAuth != null) pAuth.SavePlayerDataClientRpc(totalExpReward, totalGoldReward);
+            if (pAuth != null)
+            {
+                pAuth.Gold.Value += totalGoldReward;
+                pAuth.SaveDataToDatabase();
+                Debug.Log($"  [{(pAuth != null ? pAuth.Nickname.Value : "?")}] 라운드 종료 자동 저장 (Server-Authoritative)");
+            }
 
             if (pH != null) pH.ResetRoundCounters();
 

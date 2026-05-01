@@ -201,6 +201,13 @@ public class NetworkManagerUI : MonoBehaviour
         if (success && userData != null)
         {
             LocalUserData.Current = userData;
+
+            // 클라이언트 CsvDatabase 캐시에 즉시 등록 (향후 SaveUser가 정상 작동하도록)
+            if (CsvDatabase.Instance != null)
+            {
+                CsvDatabase.Instance.SaveUser(userData);
+            }
+
             ShowMessage("로그인 성공!", Color.green);
             
             if (lobbyUI.authGroup != null) lobbyUI.authGroup.SetActive(false);
