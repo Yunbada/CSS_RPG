@@ -360,11 +360,18 @@ public class UIGameHUDRuntime : MonoBehaviour
         {
             if (isZombie)
             {
-                // 좀비 타입에 따라 표시
-                if (state.currentZombieType.Value == ZombieType.None)
-                    classNameText.text = "< 좀비 >";
+                if (state.currentTeam.Value == Team.HostZombie)
+                {
+                    classNameText.text = "< 숙주좀비 >";
+                }
                 else
-                    classNameText.text = $"< 좀비 ({state.currentZombieType.Value}) >";
+                {
+                    // 좀비 타입에 따라 표시
+                    if (state.currentZombieType.Value == ZombieType.None)
+                        classNameText.text = "< 좀비 >";
+                    else
+                        classNameText.text = $"< 좀비 ({state.currentZombieType.Value}) >";
+                }
                 classNameText.color = Color.red;
             }
             else if (pClass != null)

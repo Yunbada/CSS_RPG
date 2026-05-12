@@ -27,8 +27,8 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
     public Transform EntityTransform => transform;
     public NetworkObject GetNetworkObject() => NetworkObject;
 
-    // 좀비 사망 시 발생하는 전역 이벤트 (킬러의 ClientId 전달)
-    public static event System.Action<ulong> OnAnyZombieDied;
+    // 좀비 사망 시 발생하는 전역 이벤트 (킬러의 ClientId, 사망자의 팀, 사망 위치 전달)
+    public static event System.Action<ulong, Team, Vector3> OnAnyZombieDied;
 
     // 형제 컴포넌트 참조
     private PlayerVFXController vfxController;
@@ -271,13 +271,24 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
     {
         if (!IsServer) return;
 
+        Team diedTeam = playerState != null ? playerState.currentTeam.Value : Team.Human;
+
+        // 물리적 3D 아이템 드롭 (숙주 좀비 처치 시 무조건 1회 드롭)
+        if (diedTeam == Team.HostZombie && ItemDatabase.Instance != null)
+        {
+            ItemDatabase.Instance.RollLootDrop(transform.position + Vector3.up * 1.5f);
+        }
+
         // 사망 이벤트 전파
         if (killerId != 9999)
         {
-            OnAnyZombieDied?.Invoke(killerId);
+            if (diedTeam != Team.Human)
+            {
+                OnAnyZombieDied?.Invoke(killerId, diedTeam, transform.position);
+            }
 
             // 킬러(좀비)의 전환 카운트 증가 (인간이 죽어서 좀비가 된 경우)
-            if (playerState != null && playerState.currentTeam.Value == Team.Human)
+            if (diedTeam == Team.Human)
             {
                 if (NetworkManager.Singleton.ConnectedClients.TryGetValue(killerId, out var killerClient)
                     && killerClient.PlayerObject != null)
@@ -295,10 +306,13 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
             }
         }
 
-        // 인간 사망 → 일반 좀비로 리스폰
-        if (playerState != null && playerState.currentTeam.Value == Team.Human)
+        // 인간 또는 숙주 좀비 사망 → 일반 좀비로 리스폰
+        if (playerState != null && (playerState.currentTeam.Value == Team.Human || playerState.currentTeam.Value == Team.HostZombie))
         {
             playerState.currentTeam.Value = Team.NormalZombie;
+            // 일반 좀비 진화 초기화 (다시 선택 가능하게)
+            playerState.currentZombieType.Value = ZombieType.None;
+            
             var paladin = GetComponentInChildren<PaladinSkillExecutor>();
             if (paladin != null) paladin.ResetShieldEnergy();
         }

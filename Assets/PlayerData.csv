@@ -1,6 +1,6 @@
 ﻿PersonalCode,ID,Password,Level,Exp,ClassIndex,Leather,Tooth,Skull,Gold,InventoryData,EquipmentData,Nickname
-CODE-0002,asdf,asdf,100,22,0,0,0,0,0,,Weapon:0;Helmet:0;Armor:0;Gloves:0;Boots:0,asdf
-CODE-0002,asd,asd,2,3,5,0,0,0,0,,Weapon:0;Helmet:0;Armor:0;Gloves:0;Boots:0,asd
+CODE-0002,asdf,asdf,100,34,5,0,0,0,0,,Weapon:0;Helmet:0;Armor:0;Gloves:0;Boots:0,asdf
+CODE-0002,asd,asd,55,3,5,0,0,0,0,,Weapon:0;Helmet:0;Armor:0;Gloves:0;Boots:0,asd
 CODE-0003,qqqq,qqqq,100,22,5,0,0,0,0,1001:1,Weapon:0;Helmet:0;Armor:0;Gloves:0;Boots:0,qqqq
 CODE-0004,wwww,wwww,100,15,1,0,0,0,0,,Weapon:0;Helmet:0;Armor:0;Gloves:0;Boots:0,wwww
 CODE-0005,asdasd,asdasd,1,33,5,0,0,1,0,2001:21;2002:21;2003:20;2004:20;2005:20;3001:20;3002:20;3003:20,Weapon:0;Helmet:0;Armor:0;Gloves:0;Boots:0,asdasd

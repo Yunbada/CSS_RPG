@@ -177,6 +177,13 @@ public class SkillSystem : MonoBehaviour
         // 등록된 스킬이 없으면 리턴 (이름이 없는 경우)
         if (string.IsNullOrEmpty(currentSkills[index].skillName)) return;
 
+        // 좀비 선정(감염) 전까지 스킬 사용 금지
+        if (RoundManager.Instance != null && RoundManager.Instance.currentState.Value < RoundState.InfectionStarted)
+        {
+            Debug.Log("숙주 좀비가 선정되기 전까지는 스킬을 사용할 수 없습니다.");
+            return;
+        }
+
         // --- 각성 레벨에 따른 스킬 덱 차단 ---
         int awkLevel = playerClass.awakeningLevel.Value;
         var pExp = GetComponent<PlayerExperience>();

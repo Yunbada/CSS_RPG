@@ -12,7 +12,6 @@ public class CombatSystem : MonoBehaviour
     [SerializeField] private float basicAttackRange = 1.5f;
     [SerializeField] private float basicAttackCooldown = 0.5f;
     [SerializeField] private float basicAttackMultiplier = 1.0f;
-    [SerializeField] private float basicAttackRadius = 0.5f;
     [SerializeField] private float basicAttackAngle = 120f;  // 전방 판정 각도 (도)
 
     private float basicAttackTimer = 0f;
@@ -145,6 +144,9 @@ public class CombatSystem : MonoBehaviour
 
         // 스킬 사용 중이면 기본 공격 차단
         if (IsUsingSkill) return;
+
+        // 좀비 선정(감염) 전까지 기본 공격 차단
+        if (RoundManager.Instance != null && RoundManager.Instance.currentState.Value < RoundState.InfectionStarted) return;
 
         // 마우스 좌클릭 기본 공격
         if (inputHandle != null && inputHandle.attackInput && basicAttackTimer <= 0f)

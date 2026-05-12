@@ -21,6 +21,9 @@ public class ServerConsole : MonoBehaviour
     private Text connText;
     private ScrollRect connScroll;
 
+    private Dropdown playerDropdown;
+    private int lastPlayerCount = -1;
+
     // 데미지 묶음 처리를 위한 데미지 버퍼 (키: Attacker_Target_Skill)
     private Dictionary<string, DamageAccumulator> damageBuffer = new Dictionary<string, DamageAccumulator>();
 
@@ -60,6 +63,9 @@ public class ServerConsole : MonoBehaviour
         instance.CreatePanel("데미지 로그", 1, out instance.dmgText, out instance.dmgScroll, new Color(1f, 0.4f, 0.4f));
         instance.CreatePanel("아이템 로그", 2, out instance.itemText, out instance.itemScroll, Color.green);
 
+        // 하단 컨트롤 패널 생성
+        instance.CreateControlPanel(consoleObj);
+
         DontDestroyOnLoad(consoleObj);
     }
 
@@ -72,7 +78,7 @@ public class ServerConsole : MonoBehaviour
         GameObject pObj = new GameObject("Panel_" + index);
         pObj.transform.SetParent(transform, false);
         RectTransform pRt = pObj.AddComponent<RectTransform>();
-        pRt.anchorMin = new Vector2(anchorMinX, 0);
+        pRt.anchorMin = new Vector2(anchorMinX, 0.15f);
         pRt.anchorMax = new Vector2(anchorMaxX, 1);
         pRt.offsetMin = new Vector2(5, 5);
         pRt.offsetMax = new Vector2(-5, -5);
@@ -139,6 +145,13 @@ public class ServerConsole : MonoBehaviour
             }
         }
         foreach (var key in keysToRemove) damageBuffer.Remove(key);
+
+        // 플레이어 리스트 갱신 (인원수 변동 시)
+        if (RoundManager.Instance != null && RoundManager.Instance.AllPlayers.Count != lastPlayerCount)
+        {
+            lastPlayerCount = RoundManager.Instance.AllPlayers.Count;
+            UpdatePlayerDropdown();
+        }
     }
 
     // 서버 등에서 명시적으로 정형화된 데미지 호출 (PlayerState.cs 에서 호출)
@@ -201,5 +214,151 @@ public class ServerConsole : MonoBehaviour
         if (connScroll) connScroll.verticalNormalizedPosition = 0f;
         if (dmgScroll) dmgScroll.verticalNormalizedPosition = 0f;
         if (itemScroll) itemScroll.verticalNormalizedPosition = 0f;
+    }
+
+    private void CreateControlPanel(GameObject parentObj)
+    {
+        GameObject cpObj = new GameObject("ControlPanel");
+        cpObj.transform.SetParent(parentObj.transform, false);
+        RectTransform cpRt = cpObj.AddComponent<RectTransform>();
+        cpRt.anchorMin = new Vector2(0, 0);
+        cpRt.anchorMax = new Vector2(1, 0.15f);
+        cpRt.offsetMin = new Vector2(5, 5);
+        cpRt.offsetMax = new Vector2(-5, -5);
+
+        Image cpBg = cpObj.AddComponent<Image>();
+        cpBg.color = new Color(0.15f, 0.15f, 0.15f, 0.9f);
+
+        HorizontalLayoutGroup hlg = cpObj.AddComponent<HorizontalLayoutGroup>();
+        hlg.childControlWidth = true; hlg.childControlHeight = true;
+        hlg.childForceExpandWidth = true; hlg.childForceExpandHeight = true;
+        hlg.spacing = 10;
+        hlg.padding = new RectOffset(10, 10, 10, 10);
+
+        DefaultControls.Resources uiResources = new DefaultControls.Resources();
+
+        // 1. Player Dropdown
+        GameObject dropdownObj = DefaultControls.CreateDropdown(uiResources);
+        dropdownObj.transform.SetParent(cpObj.transform, false);
+        playerDropdown = dropdownObj.GetComponent<Dropdown>();
+        
+        Text label = playerDropdown.captionText;
+        if (label != null)
+        {
+            label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            label.fontSize = 20;
+            label.color = Color.black;
+            label.alignment = TextAnchor.MiddleCenter;
+            label.horizontalOverflow = HorizontalWrapMode.Overflow;
+            label.verticalOverflow = VerticalWrapMode.Overflow;
+        }
+
+        Text itemLabel = playerDropdown.itemText;
+        if (itemLabel != null)
+        {
+            itemLabel.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            itemLabel.fontSize = 20;
+            itemLabel.color = Color.black;
+            itemLabel.horizontalOverflow = HorizontalWrapMode.Overflow;
+            itemLabel.verticalOverflow = VerticalWrapMode.Overflow;
+        }
+
+        // Buttons
+        CreateButton(cpObj, uiResources, "Kill", OnKillClicked, new Color(1f, 0.5f, 0.5f));
+        CreateButton(cpObj, uiResources, "Item", OnItemClicked, new Color(0.5f, 1f, 0.5f));
+        CreateButton(cpObj, uiResources, "ReStart", OnStartClicked, new Color(0.5f, 0.5f, 1f));
+        CreateButton(cpObj, uiResources, "Freeze", OnFreezeClicked, new Color(1f, 1f, 0.5f));
+    }
+
+    private void CreateButton(GameObject parent, DefaultControls.Resources res, string text, UnityEngine.Events.UnityAction action, Color color)
+    {
+        GameObject btnObj = DefaultControls.CreateButton(res);
+        btnObj.transform.SetParent(parent.transform, false);
+        btnObj.GetComponent<Image>().color = color;
+        Text t = btnObj.GetComponentInChildren<Text>();
+        t.text = text;
+        t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        t.fontSize = 25;
+        t.color = Color.black;
+        btnObj.GetComponent<Button>().onClick.AddListener(action);
+    }
+
+    private void OnKillClicked()
+    {
+        if (playerDropdown == null || RoundManager.Instance == null) return;
+        var players = RoundManager.Instance.AllPlayers;
+        if (playerDropdown.value >= 0 && playerDropdown.value < players.Count)
+        {
+            var target = players[playerDropdown.value];
+            if (target != null)
+            {
+                var health = target.GetComponent<PlayerHealth>();
+                if (health != null)
+                {
+                    health.TakeDamage(9999, "Admin Kill", 9999);
+                    string targetNick = "Unknown";
+                    var auth = target.GetComponent<PlayerAuthentication>();
+                    if (auth != null) targetNick = auth.Nickname.Value.ToString();
+                    LogDamage("Admin", targetNick, "Kill Command", 9999, 0);
+                }
+            }
+        }
+    }
+
+    private void OnItemClicked()
+    {
+        if (ItemDatabase.Instance != null)
+        {
+            ItemDatabase.Instance.RollLootDrop(Vector3.up);
+            LogItem("[Admin] Spawned LootDrop at (0,1,0)");
+        }
+    }
+
+    private void OnStartClicked()
+    {
+        if (RoundManager.Instance != null)
+        {
+            RoundManager.Instance.StartRound();
+            AddLog(instance.connQueue, instance.connText, instance.connScroll, "[Admin] Force Round Restart", "#FFFF00");
+        }
+    }
+
+    private void OnFreezeClicked()
+    {
+        bool isFreezing = Time.timeScale != 0f;
+        Time.timeScale = isFreezing ? 0f : 1f;
+        
+        if (RoundManager.Instance != null)
+        {
+            RoundManager.Instance.SetFreezeStateClientRpc(isFreezing);
+        }
+        AddLog(instance.connQueue, instance.connText, instance.connScroll, $"[Admin] Game Freeze: {(isFreezing ? "ON" : "OFF")}", "#FFFF00");
+    }
+
+    private void UpdatePlayerDropdown()
+    {
+        if (playerDropdown == null || RoundManager.Instance == null) return;
+        
+        var players = RoundManager.Instance.AllPlayers;
+        string currentSelection = playerDropdown.options.Count > 0 ? playerDropdown.options[playerDropdown.value].text : "";
+        
+        playerDropdown.ClearOptions();
+        List<string> options = new List<string>();
+        foreach (var p in players)
+        {
+            if (p != null)
+            {
+                var auth = p.GetComponent<PlayerAuthentication>();
+                string nick = (auth != null && !string.IsNullOrEmpty(auth.Nickname.Value.ToString())) ? auth.Nickname.Value.ToString() : $"유저{p.OwnerClientId}";
+                options.Add(nick);
+            }
+        }
+        
+        if (options.Count == 0) options.Add("No Players");
+        playerDropdown.AddOptions(options);
+
+        int newIdx = options.IndexOf(currentSelection);
+        if (newIdx >= 0) playerDropdown.value = newIdx;
+        else playerDropdown.value = 0;
     }
 }

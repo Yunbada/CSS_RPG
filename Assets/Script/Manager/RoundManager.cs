@@ -261,6 +261,16 @@ public class RoundManager : NetworkBehaviour
         currentState.Value = RoundState.RoundEnded;
         Debug.Log($"[RoundManager] 라운드 종료! 승리: {winningTeam}");
         
+        // 라운드 종료 시 모든 드롭된 아이템 파괴
+        var activeLoot = FindObjectsByType<LootDrop>(FindObjectsSortMode.None);
+        foreach (var loot in activeLoot)
+        {
+            if (loot != null && loot.NetworkObject != null && loot.NetworkObject.IsSpawned)
+            {
+                loot.NetworkObject.Despawn(true);
+            }
+        }
+        
         foreach (var p in PlayerState.AllPlayersList)
         {
             if (p == null) continue;
@@ -383,6 +393,24 @@ public class RoundManager : NetworkBehaviour
         // 그러므로 ClientRpc를 통해서 Client (소유주)에서 물리적 이동을 하도록 호출하여 동기화를 진행합니다.
         var pH = player.GetComponent<PlayerHealth>();
         if (pH != null) pH.TeleportClientRpc(position);
+    }
+
+    [ClientRpc]
+    public void SetFreezeStateClientRpc(bool isFreeze)
+    {
+        Time.timeScale = isFreeze ? 0f : 1f;
+        
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClient != null)
+        {
+            var localPlayer = NetworkManager.Singleton.LocalClient.PlayerObject;
+            if (localPlayer != null)
+            {
+                var movement = localPlayer.GetComponentInChildren<PlayerMovement>();
+                if (movement != null) movement.enabled = !isFreeze;
+                var combat = localPlayer.GetComponentInChildren<CombatSystem>();
+                if (combat != null) combat.enabled = !isFreeze;
+            }
+        }
     }
 
     // =========================================================================

@@ -4,6 +4,15 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Text;
 
+public class LootDropData
+{
+    public int DropID;
+    public int ItemID;
+    public float Probability;
+    public string PrefabPath;
+    public GameObject Prefab;
+}
+
 /// <summary>
 /// 아이템 및 레시피 CSV를 파싱하여 캐싱하는 싱글톤 매니저.
 /// CsvDatabase(플레이어 데이터)와 별도로, 아이템 정적 정보를 관리합니다.
@@ -17,6 +26,8 @@ public class ItemDatabase : MonoBehaviour
     private Dictionary<int, ItemData> itemCache = new Dictionary<int, ItemData>();
     // 레시피 정의 캐시
     private List<RecipeData> recipeCache = new List<RecipeData>();
+    // 물리적 3D 드롭 아이템 캐시
+    private List<LootDropData> lootDropCache = new List<LootDropData>();
     // 드롭 테이블 (가중치 기반)
     private List<ItemData> dropTable = new List<ItemData>();
     private int totalDropWeight = 0;
@@ -29,6 +40,7 @@ public class ItemDatabase : MonoBehaviour
             DontDestroyOnLoad(gameObject);
             LoadItemDatabase();
             LoadRecipeDatabase();
+            LoadLootDropDatabase();
             BuildDropTable();
         }
         else
@@ -133,6 +145,46 @@ public class ItemDatabase : MonoBehaviour
         Debug.Log($"[ItemDatabase] 레시피 {recipeCache.Count}종 로드 완료.");
     }
 
+    private void LoadLootDropDatabase()
+    {
+        string filePath = Application.dataPath + "/LootDropDatabase.csv";
+        if (!File.Exists(filePath))
+        {
+            Debug.LogWarning($"[ItemDatabase] LootDropDatabase.csv를 찾을 수 없습니다: {filePath}");
+            return;
+        }
+
+        string[] lines = File.ReadAllLines(filePath, Encoding.UTF8);
+        for (int i = 1; i < lines.Length; i++)
+        {
+            if (string.IsNullOrWhiteSpace(lines[i])) continue;
+            string[] cols = lines[i].Split(',');
+            if (cols.Length < 4) continue;
+
+            try
+            {
+                LootDropData drop = new LootDropData();
+                int.TryParse(cols[0].Trim(), out drop.DropID);
+                int.TryParse(cols[1].Trim(), out drop.ItemID);
+                float.TryParse(cols[2].Trim(), out drop.Probability);
+                drop.PrefabPath = cols[3].Trim();
+                
+                drop.Prefab = Resources.Load<GameObject>(drop.PrefabPath);
+                if (drop.Prefab == null)
+                {
+                    Debug.LogWarning($"[ItemDatabase] 드롭 프리팹을 찾을 수 없습니다: Resources/{drop.PrefabPath}");
+                }
+
+                lootDropCache.Add(drop);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[ItemDatabase] LootDropDB {i+1}번째 줄 파싱 실패: {e.Message}");
+            }
+        }
+        Debug.Log($"[ItemDatabase] 확률성 드롭 아이템 {lootDropCache.Count}종 로드 완료.");
+    }
+
     private void BuildDropTable()
     {
         dropTable.Clear();
@@ -200,6 +252,38 @@ public class ItemDatabase : MonoBehaviour
 
         // 안전장치 (도달할 일 없음)
         return dropTable[dropTable.Count - 1];
+    }
+
+    /// <summary>
+    /// 물리적인 3D 아이템 드롭 시도 (호스트 좀비 사망 등 특정 조건에서 호출)
+    /// </summary>
+    public void RollLootDrop(Vector3 position)
+    {
+        if (lootDropCache.Count == 0) return;
+
+        foreach (var drop in lootDropCache)
+        {
+            if (UnityEngine.Random.value <= drop.Probability)
+            {
+                if (drop.Prefab != null)
+                {
+                    GameObject instance = Instantiate(drop.Prefab, position, Quaternion.identity);
+                    var networkObj = instance.GetComponent<Unity.Netcode.NetworkObject>();
+                    if (networkObj != null)
+                    {
+                        networkObj.Spawn();
+                    }
+                    
+                    var lootDrop = instance.GetComponent<LootDrop>();
+                    if (lootDrop != null)
+                    {
+                        lootDrop.ItemID.Value = drop.ItemID;
+                    }
+
+                    Debug.Log($"[ItemDatabase] 3D 큐브 드롭 성공! ItemID: {drop.ItemID}");
+                }
+            }
+        }
     }
 
     /// <summary>

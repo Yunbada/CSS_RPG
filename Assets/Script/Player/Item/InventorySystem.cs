@@ -84,7 +84,7 @@ public class InventorySystem : NetworkBehaviour
     // =========================================================================
     // 좀비 처치 → 아이템 자동 획득
     // =========================================================================
-    private void HandleZombieDied(ulong killerId)
+    private void HandleZombieDied(ulong killerId, Team diedTeam, Vector3 deathPos)
     {
         if (killerId != OwnerClientId) return;
 
